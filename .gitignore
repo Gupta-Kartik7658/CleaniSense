@@ -1,0 +1,103 @@
+# ==========================================
+# Dependencies & Package Managers
+# ==========================================
+# Next.js / Node dependencies
+node_modules/
+jspm_packages/
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Poetry, Pipenv, and Conda artifacts
+.eggs/
+*.egg-info/
+.installed.cfg
+.pipenv/
+.pdm/
+
+# ==========================================
+# Build Outputs & Caches
+# ==========================================
+# Next.js build and production outputs
+.next/
+out/
+dist/
+build/
+
+# Python byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+
+# Inline documentation / Type checking caches
+.mypy_cache/
+.pyre_cache/
+.pytype_cache/
+.ruff_cache/
+.node-xml/
+
+# ==========================================
+# Environment Variables & Secrets (CRITICAL)
+# ==========================================
+# Never commit real API keys or passwords
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.secret
+
+# ==========================================
+# Testing & Code Coverage
+# ==========================================
+# JavaScript testing
+coverage/
+
+# Python testing & linting
+.toml
+.cache
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+.fscv.cache
+
+# ==========================================
+# Databases & Media Storage
+# ==========================================
+# SQLite (commonly used in local development)
+*.sqlite3
+*.db
+
+# Local media uploads or large datasets
+/public/uploads/
+data/
+*.log
+
+# ==========================================
+# IDEs, Text Editors, & OS Noise
+# ==========================================
+# Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Operating Systems
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db
