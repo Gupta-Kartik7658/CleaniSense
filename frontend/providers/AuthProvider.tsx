@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await signOut(auth);
       setUser(null);
       document.cookie = "cleanisense_token=; path=/; max-age=0; SameSite=Lax";
-      router.push("/login");
+      router.push("/");
       setLoading(false);
     }
   };
