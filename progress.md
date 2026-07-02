@@ -4,6 +4,15 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-02] Authentication Navigation & Login UI Polish
+Enhanced authentication redirects and the login sub-interface to align with the premium GovTech theme.
+- **Logout Landing Redirect**: Updated `providers/AuthProvider.tsx` logout routine to route users back to the landing page (`/`) instead of the unpolished `/login` view, creating a welcoming exit experience.
+- **Login Page Redesign**: Rewrote `app/(auth)/login/page.tsx` utilizing a clean, bright public sector theme.
+- **Back Navigation Button**: Added an inline navigation button (`← Back to Home`) at the top of the login card to allow simple, smooth return paths to the landing page `/`.
+- **Card Aesthetics**: Polished the auth layout structure (`app/(auth)/layout.tsx`) using white/slate borders and premium shadows.
+
+---
+
 ### [2026-07-02] Landing Page UI Refinement (GovTech Style)
 Refined the main landing page (`frontend/app/page.tsx`) to shift the visual identity from a generic startup to a premium digital public service platform (resembling DigiLocker or Aarogya Setu) to build trust among citizens, municipal authorities, and government stakeholders.
 
@@ -11,13 +20,13 @@ Refined the main landing page (`frontend/app/page.tsx`) to shift the visual iden
 - **Civic Trust Hero Section**:
   - Implemented citizen-first headline: `"Every Street Deserves Clean Air."`
   - Tagline: `"Help Build Cleaner and Healthier Communities."`
-  - Formed a civic flowchart vector card: `Citizen` ➔ `Reports Pollution` ➔ `System Reviews Report` ➔ `Authorities Receive Priority Alert` ➔ `Issue Gets Resolved`.
+  - Formed a civic flowchart vector card: `Citizen` ➔ `Reports Pollution` ➔ `System Reviews Report` ➔ `Authorities Receive Priority Alert` ➔ `Issue Gets Resolved` using clean layouts (roads, buildings, trees, pins, notification cards).
 - **"Why This Matters" Problem Statement**: Built a clean, visually strong typographic block detailing the structured reporting gap in local neighborhoods.
 - **"How CleaniSense Benefits Everyone"**: Created three equally sized cards detailing distinct public values for Citizens, Municipal Authorities, and Communities & Organizations.
 - **"From Report to Resolution" Timeline**: Configured a 7-step horizontal flowchart stepper detailing coordinate verification, review, priority assessment, assignment, and closure.
 - **High-Fidelity Previews**: Built mock interface elements representing the Citizen Dashboard (reporting stats), Report Issue Form (attachment hooks), Issue Tracking Status (verification checkmarks), and Hotspot Map (coordinate pins).
 - **"What You Can Do" (Capabilities)**: Added 6 structured cards with large icons and exactly two lines of detail.
-- **"Built Around Transparency" (Trust Framework)**: Included 5 trust verification badges (Verified User Auth, Location Verification, Progress Tracking, Priority Response, Community Participation).
+- **"Built Around Transparency" (Trust Section)**: Included 5 trust verification badges (Verified User Auth, Location Verification, Progress Tracking, Priority Response, Community Participation).
 - **Platform Performance Counters**: Placed realistic counters for submitted reports, active hotspots, municipal zones, and resolved tickets.
 - **CleaniSense Difference Grid**: Built a side-by-side comparison table contrasting traditional legacy reports (calls, paper, delayed responses) with CleaniSense (digital, verified, transparent tracking, centralized monitoring).
 - **Civic Footer**: Configured a professional municipal footer enclosing only relevant links (About, Privacy Policy, Contact, Accessibility, Terms of Service) with no Github badges or tech icons.
