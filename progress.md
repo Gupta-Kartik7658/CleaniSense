@@ -4,6 +4,55 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-02] Citizen Dashboard Light/Dark Mode Theme Preference & Accessibility
+Implemented class-based theme preference switching (Light / Dark Mode) across the citizen portal workspace, ensuring text color high contrast readability for GovTech standards.
+
+#### Frontend (Next.js 15)
+- **ThemeProvider Integration**:
+  - Created `providers/ThemeProvider.tsx` exposing `theme`, `toggleTheme()`, and `setTheme()`.
+  - Cached selection preference in `localStorage` and system media query properties (`prefers-color-scheme`).
+  - Toggles the `.dark` class directly on the `document.documentElement` to trigger Tailwind CSS utilities.
+  - Wrapped root layout `app/layout.tsx` in `<ThemeProvider>`.
+- **Global CSS Configuration**: Updated `app/globals.css` with `@variant dark (&:where(.dark, .dark *))` to support class-based dark mode overrides in Tailwind v4. Defined CSS theme variable transitions.
+- **PortalLayout Standardisation**:
+  - Developed `components/dashboard/PortalLayout.tsx` as a shared layout wrapper for all protected pages (`/dashboard`, `/complaints`, `/hotspots`, `/profile`).
+  - Synchronizes user session status and auto-redirects unauthenticated clients to `/login`.
+  - Updated `/complaints/page.tsx` and `/hotspots/page.tsx` layouts to use this PortalLayout structure.
+- **Profile Preference Panel**: Modified `/profile/page.tsx` wrapping in `PortalLayout` and added a "Theme Preference" card showing clickable cards to select "Light Mode" or "Dark Mode" directly.
+- **Component Text Accessibility Updates**: Polished all primary portal components to support dark mode class overrides, verifying slate background levels and white text values:
+  - `StatCard`, `QuickActions`, `DashboardHeader`, `SectionHeader`
+  - `ReportCard`, `ReportsSection`
+  - `HotspotMap`, `HotspotList`, `HotspotSection`
+
+---
+
+### [2026-07-02] Citizen Dashboard Frontend UI Implementation
+Implemented the refined enterprise-grade Citizen Dashboard layout and modular components structure, ensuring strict adherence to the Google Cloud Console / Material Design 3 density guidelines.
+
+#### Frontend (Next.js 15)
+- **Top Bar Navigation**:
+  - Rewrote `app/dashboard/layout.tsx` to remove the sidebar layout.
+  - Formed a sticky top navigation header containing the CleaniSense brand, a notification badge counter (`3` unread alerts), user profile avatar, and a sign-out trigger.
+- **Split Column Dashboard Layout**:
+  - Integrated full-width blocks for the Dashboard Header, Quick Actions, and Overview statistics.
+  - Constructed a two-column desktop split row:
+    - **Left Column (60% width)**: Houses the `ReportsSection` containing active citizen-submitted complaints list.
+    - **Right Column (40% width)**: Houses the `HotspotSection` containing the interactive mapping mock canvas and nearby hotspot data list.
+- **Custom React Hooks Layer**: Built `hooks/useDashboard.ts` delivering stateful values (`data`, `loading`, `error`) wrapped with simulated async delays to mock real network fetch routines.
+- **Types & Mock Centralization**:
+  - `types/dashboard.ts`: Created centralized TS interfaces for `StatCardData`, `ReportItem`, `HotspotItem`, and `DashboardData`.
+  - `mock/dashboard.ts`: Initialized mock structures mimicking actual municipal coordinates, severity indicators, and human-readable locations (e.g. `"Satellite Road, Ahmedabad"`).
+- **Core Components & Layout Subsections**:
+  - `components/common/Skeleton.tsx`: Custom pulsing loading state placeholder.
+  - `components/common/EmptyState.tsx`: Reusable fallback indicating empty lists, containing details and action buttons.
+  - `components/dashboard/SectionHeader.tsx`: Displays headers with navigation actions ("View All →").
+  - `components/dashboard/OverviewSection.tsx`: Houses the 4 metrics cards.
+  - `components/dashboard/QuickActions.tsx`: Action card grid mapping portal pages (Report Issue, Reports, Nearby Hotspots, Profile).
+  - `components/dashboard/reports/ReportCard.tsx` & `ReportsSection.tsx`: Display card showing title, status badge, human-readable locations, and date.
+  - `components/dashboard/hotspots/HotspotMap.tsx` & `HotspotList.tsx`: Displays active mapping grids, mock locations pins, and distances metrics.
+
+---
+
 ### [2026-07-02] Authentication Navigation & Login UI Polish
 Enhanced authentication redirects and the login sub-interface to align with the premium GovTech theme.
 - **Logout Landing Redirect**: Updated `providers/AuthProvider.tsx` logout routine to route users back to the landing page (`/`) instead of the unpolished `/login` view, creating a welcoming exit experience.
