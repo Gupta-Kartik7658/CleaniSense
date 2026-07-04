@@ -1,0 +1,158 @@
+"use client";
+
+import React, { useState } from "react";
+import { PortalLayout } from "@/components/dashboard/PortalLayout";
+import { mockDetailedReports } from "@/mock/dashboard";
+import { StatusBadge } from "@/components/dashboard/StatusBadge";
+import Link from "next/link";
+
+export default function ComplaintsHistoryPage() {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<
+    "All" | "Pending" | "Under Review" | "Resolved" | "Rejected"
+  >("All");
+
+  const filteredReports = mockDetailedReports.filter((report) => {
+    const matchesSearch =
+      report.title.toLowerCase().includes(search.toLowerCase()) ||
+      report.locationName.toLowerCase().includes(search.toLowerCase()) ||
+      report.id.toLowerCase().includes(search.toLowerCase());
+
+    const matchesFilter = filter === "All" || report.status === filter;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  return (
+    <PortalLayout>
+      <div className="space-y-6 max-w-4xl mx-auto text-left">
+        
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Complaint History
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Track and review all your submitted environmental reports
+            </p>
+          </div>
+          <Link
+            href="/complaints"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-sm text-xs cursor-pointer"
+          >
+            Report New Issue
+          </Link>
+        </div>
+
+        {/* Filters and Search Bar */}
+        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+          
+          {/* Search Box */}
+          <div className="md:col-span-5 relative">
+            <input
+              type="text"
+              placeholder="Search by ID, title, or location..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+            />
+          </div>
+
+          {/* Filter Toggles */}
+          <div className="md:col-span-7 flex flex-wrap gap-1 text-[10px]">
+            {(["All", "Pending", "Under Review", "Resolved", "Rejected"] as const).map(
+              (status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition-all ${
+                    filter === status
+                      ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-400"
+                      : "border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                  }`}
+                >
+                  {status}
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* Complaints Listing */}
+        {filteredReports.length === 0 ? (
+          <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20">
+            <span className="text-3xl block mb-2">📁</span>
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
+              No complaints found matching the criteria.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredReports.map((report) => (
+              <div
+                key={report.id}
+                className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-150 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded">
+                      #{report.id}
+                    </span>
+                    <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-none">
+                      {report.title}
+                    </h4>
+                    <StatusBadge status={report.status} />
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                    <p>
+                      <span className="text-slate-400">🏷️</span> Category:{" "}
+                      <span className="font-semibold text-slate-700 dark:text-slate-350">
+                        {report.category}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-400">📍</span> {report.locationName}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">⚠️</span> AI Severity:{" "}
+                      <span
+                        className={`font-semibold ${
+                          report.severity === "High"
+                            ? "text-rose-600 dark:text-rose-400"
+                            : "text-amber-600 dark:text-amber-400"
+                        }`}
+                      >
+                        {report.severity}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-400">📅</span> Submitted:{" "}
+                      <span className="font-medium">
+                        {new Date(report.date).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="shrink-0 flex items-center">
+                  <Link
+                    href={`/complaints/${report.id}`}
+                    className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-750 dark:text-slate-300 dark:border-slate-700 text-xs font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer block text-center w-full sm:w-auto"
+                  >
+                    View Details
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </PortalLayout>
+  );
+}

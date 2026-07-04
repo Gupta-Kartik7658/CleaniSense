@@ -28,10 +28,10 @@ export function QuickActions() {
       link: "/hotspots",
     },
     {
-      icon: "👤",
-      title: "Profile",
-      desc: "Review your account role credentials",
-      link: "/profile",
+      icon: "📖",
+      title: "Reporting Guide",
+      desc: "Learn how to submit high-quality environmental reports",
+      link: "/guidelines",
     },
   ];
 

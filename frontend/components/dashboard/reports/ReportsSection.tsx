@@ -18,7 +18,7 @@ export function ReportsSection({
   const router = useRouter();
 
   const handleNavigate = () => {
-    router.push("/complaints");
+    router.push("/complaints/history");
   };
 
   const handleReportFirstIssue = () => {

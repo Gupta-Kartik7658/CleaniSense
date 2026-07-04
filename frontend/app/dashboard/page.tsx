@@ -3,7 +3,7 @@
 import React from "react";
 import { useDashboard } from "@/hooks/useDashboard";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
-import { QuickActions } from "@/components/dashboard/QuickActions";
+import { ReportHero } from "@/components/dashboard/ReportHero";
 import { OverviewSection } from "@/components/dashboard/OverviewSection";
 import { ReportsSection } from "@/components/dashboard/reports/ReportsSection";
 import { HotspotSection } from "@/components/dashboard/hotspots/HotspotSection";
@@ -17,8 +17,8 @@ export default function DashboardPage() {
       {/* 1. Dashboard Header */}
       <DashboardHeader />
 
-      {/* 2. Quick Actions */}
-      <QuickActions />
+      {/* 2. Report Hero Section */}
+      <ReportHero />
 
       {/* 3. Overview Statistics (OverviewSection) */}
       {error ? (

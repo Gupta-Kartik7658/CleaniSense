@@ -45,7 +45,7 @@ export default function ProfilePage() {
                 Organization Role
               </span>
               <p className="text-slate-800 dark:text-slate-250 font-bold capitalize">
-                {user?.role}
+                {user?.role || "citizen"}
               </p>
             </div>
             <div>
@@ -79,32 +79,43 @@ export default function ProfilePage() {
             <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-widest">
               Theme Preference
             </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-normal">
+            <p className="text-xs text-slate-550 dark:text-slate-400 leading-normal">
               Select how the CleaniSense interface appears on your device.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <button
               onClick={() => setTheme("light")}
-              className={`p-5 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
+              className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
                 theme === "light"
                   ? "border-emerald-600 bg-emerald-50/10 text-emerald-800 font-bold"
-                  : "border-slate-200 text-slate-500 hover:bg-slate-50"
+                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
               }`}
             >
-              <span className="text-2xl">☀️</span>
-              <span className="text-xs">Light Mode</span>
+              <span className="text-xl font-bold">☀️</span>
+              <span className="text-xs">Light</span>
             </button>
             <button
               onClick={() => setTheme("dark")}
-              className={`p-5 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
+              className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
                 theme === "dark"
                   ? "border-emerald-600 bg-emerald-950/20 text-emerald-400 font-bold"
-                  : "border-slate-700 text-slate-400 hover:bg-slate-900/50"
+                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
               }`}
             >
-              <span className="text-2xl">🌙</span>
-              <span className="text-xs">Dark Mode</span>
+              <span className="text-xl font-bold">🌙</span>
+              <span className="text-xs">Dark</span>
+            </button>
+            <button
+              onClick={() => setTheme("system")}
+              className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
+                theme === "system"
+                  ? "border-emerald-600 bg-emerald-50/10 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400 font-bold"
+                  : "border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+              }`}
+            >
+              <span className="text-xl font-bold">💻</span>
+              <span className="text-xs">System</span>
             </button>
           </div>
         </div>

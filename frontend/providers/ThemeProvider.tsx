@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "system";
 
 interface ThemeContextType {
   theme: Theme;
@@ -13,27 +13,42 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+  const [theme, setThemeState] = useState<Theme>("system");
 
   useEffect(() => {
-    // Read cached theme or default to system preference
-    const savedTheme = localStorage.getItem("cleanisense_theme") as Theme;
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
+    const savedTheme = (localStorage.getItem("cleanisense_theme") as Theme) || "system";
+    setThemeState(savedTheme);
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     
-    setThemeState(initialTheme);
-    
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    const applyTheme = (currentTheme: Theme) => {
+      if (currentTheme === "dark" || (currentTheme === "system" && mediaQuery.matches)) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    };
+
+    applyTheme(savedTheme);
+
+    const handleSystemThemeChange = () => {
+      // Re-apply if system theme preference is currently selected
+      const currentSaved = localStorage.getItem("cleanisense_theme") as Theme;
+      if (!currentSaved || currentSaved === "system") {
+        applyTheme("system");
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleSystemThemeChange);
+    return () => mediaQuery.removeEventListener("change", handleSystemThemeChange);
   }, []);
 
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
     localStorage.setItem("cleanisense_theme", newTheme);
-    if (newTheme === "dark") {
+
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (newTheme === "dark" || (newTheme === "system" && systemPrefersDark)) {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
@@ -41,7 +56,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
+    if (theme === "system") {
+      setTheme("light");
+    } else if (theme === "light") {
+      setTheme("dark");
+    } else {
+      setTheme("system");
+    }
   };
 
   return (

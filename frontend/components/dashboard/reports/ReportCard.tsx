@@ -29,8 +29,8 @@ export function ReportCard({ report }: ReportCardProps) {
       </div>
       <div className="flex items-center">
         <a
-          href={`/complaints#${report.id}`}
-          className="bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-750 dark:text-slate-305 dark:border-slate-700 text-xs font-bold px-4 py-2 border rounded-lg transition-colors cursor-pointer text-center block w-full sm:w-auto"
+          href={`/complaints/${report.id}`}
+          className="bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-750 dark:text-slate-300 dark:border-slate-700 text-xs font-bold px-4 py-2 border rounded-lg transition-colors cursor-pointer text-center block w-full sm:w-auto"
         >
           View Details
         </a>
