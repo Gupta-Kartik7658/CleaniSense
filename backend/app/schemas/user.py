@@ -18,6 +18,7 @@ class UserUpdate(BaseModel):
     profile_picture: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    firebase_uid: Optional[str] = None
 
 class UserResponse(UserBase):
     id: uuid.UUID
