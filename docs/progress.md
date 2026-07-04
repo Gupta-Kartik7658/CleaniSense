@@ -4,6 +4,23 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-04] Complete Frontend-Backend Integration & Demo Data Removal
+Integrated all frontend pages with backend RESTful APIs, decoupled mock files into a production-style architecture, and verified behavior on clean database states.
+
+#### Frontend-Backend Service Integration
+- **Citizen Dashboard**: Hooked `useDashboard()` to dynamic statistics counts, reports lists, and nearby hotspots.
+- **Dynamic Preferences Sync**: Connected layout theme switches, language selections, and notifications preference toggles directly to sync preferences with the backend database.
+- **On-Demand Notifications Feed**: Wired the notification bell to fetch unread feed on-demand only when the dropdown is toggled.
+- **Reporting Form**: Implemented dynamic category lists from `/config`, geolocation auto-sync, client-side constraints (size, formats), concurrent media uploads (`Promise.all`), success toast feedback, and redirects.
+- **History List Querying**: Connected search, pagination, and status filters in the history view to query strings hitting the unified `/api/v1/complaints` route.
+- **Details Timeline**: Visualized dynamic audit logs, attachment lists, and resolved side-by-side evidence images.
+
+#### Complete Demo Data Purge
+- **Mock Folder Deletion**: Deleted the entire `frontend/mock/` folder and removed all dependencies.
+- **Clean DB Seeding**: Removed preloaded active hotspots (`HOTSPOTS_SEED`) from database seed configurations.
+- **Test Transaction Isolation**: Updated profile test setup to dynamically seed local hotspots within isolated test transactions.
+- **Next.js Production Build**: Verified compile-time Next.js configuration builds successfully with no compiler or type warnings.
+
 ### [2026-07-04] Complete Backend Citizen Module & Operations Improvements
 Implemented the complete, production-grade Citizen Module backend and verification logic, adhering to FastAPI, clean API-Service-Repository patterns, and relational SQLite/PostgreSQL schemas.
 

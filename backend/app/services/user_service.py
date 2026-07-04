@@ -11,6 +11,12 @@ class UserService:
         """
         return user_repository.get_by_firebase_uid(db, firebase_uid)
 
+    def get_user_by_email(self, db: Session, email: str) -> Optional[User]:
+        """
+        Retrieve a user profile using their email.
+        """
+        return user_repository.get_by_email(db, email)
+
     def create_user(self, db: Session, user_in: UserCreate) -> User:
         """
         Create a new user profile.
