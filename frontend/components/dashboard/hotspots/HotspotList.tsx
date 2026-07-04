@@ -35,7 +35,7 @@ export function HotspotList({ hotspots, loading = false }: HotspotListProps) {
     );
   }
 
-  const priorityColors = {
+  const priorityColors: Record<string, string> = {
     High: "bg-rose-50 border-rose-100 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-400",
     Medium: "bg-amber-50 border-amber-100 text-amber-805 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400",
     Low: "bg-slate-50 border-slate-100 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400",

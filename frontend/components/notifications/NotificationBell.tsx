@@ -3,70 +3,25 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Notification } from "./NotificationItem";
 import { NotificationDropdown } from "./NotificationDropdown";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useDashboard } from "@/hooks/useDashboard";
 
 export function NotificationBell() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-
+  const { data: dashboardData } = useDashboard();
+  const { notifications, fetchNotifications, markRead, markAllRead } = useNotifications();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load notifications state
+  // Fetch notifications only when user clicks to open dropdown
   useEffect(() => {
-    const initialNotifications: Notification[] = [
-      {
-        id: "notif-001",
-        title: "Complaint Resolved Successfully",
-        message: "The garbage heap at Satellite Road has been cleared. Tap to inspect evidence.",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 mins ago
-        isRead: false,
-        complaintId: "rep-001",
-        type: "resolved",
-      },
-      {
-        id: "notif-002",
-        title: "Municipality Assigned to Work",
-        message: "Ahmedabad Municipal Corporation accepted Open Waste Burning report at Bopal.",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        isRead: false,
-        complaintId: "rep-002",
-        type: "accepted",
-      },
-      {
-        id: "notif-003",
-        title: "AI Verification Completed",
-        message: "Smoke emission verified. Severity flagged: High.",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-        isRead: true,
-        complaintId: "rep-003",
-        type: "ai_verified",
-      },
-      {
-        id: "notif-004",
-        title: "Additional Info Requested",
-        message: "Blocked Drainage: Please submit a clearer image of the coordinates.",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(), // 3 days ago
-        isRead: true,
-        complaintId: "rep-005",
-        type: "info_requested",
-      },
-    ];
-
-    const cached = localStorage.getItem("cleanisense_notifications");
-    if (cached) {
-      setNotifications(JSON.parse(cached));
-    } else {
-      setNotifications(initialNotifications);
-      localStorage.setItem(
-        "cleanisense_notifications",
-        JSON.stringify(initialNotifications)
-      );
+    if (dropdownOpen) {
+      const controller = new AbortController();
+      fetchNotifications(undefined, 1, 20, controller.signal);
+      return () => {
+        controller.abort();
+      };
     }
-  }, []);
-
-  const saveNotifications = (updated: Notification[]) => {
-    setNotifications(updated);
-    localStorage.setItem("cleanisense_notifications", JSON.stringify(updated));
-  };
+  }, [dropdownOpen, fetchNotifications]);
 
   // Close dropdown on outside click or Esc key
   useEffect(() => {
@@ -96,19 +51,23 @@ export function NotificationBell() {
     };
   }, [dropdownOpen]);
 
-  const handleMarkRead = (id: string) => {
-    const updated = notifications.map((n) =>
-      n.id === id ? { ...n, isRead: true } : n
-    );
-    saveNotifications(updated);
-  };
+  // Map API NotificationResponse to UI Notification objects
+  const uiNotifications: Notification[] = notifications
+    ? notifications.items.map((n) => ({
+        id: n.id,
+        title: n.title,
+        message: n.message,
+        timestamp: n.created_at,
+        isRead: n.is_read,
+        complaintId: n.complaint_id || "",
+        type: (n.type?.toLowerCase() as any) || "submitted"
+      }))
+    : [];
 
-  const handleMarkAllRead = () => {
-    const updated = notifications.map((n) => ({ ...n, isRead: true }));
-    saveNotifications(updated);
-  };
-
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // Centralized badge unread count: prioritize dashboard summary, fallback to local list count
+  const unreadCount = dashboardData?.unreadNotifications !== undefined
+    ? dashboardData.unreadNotifications
+    : uiNotifications.filter((n) => !n.isRead).length;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -129,9 +88,9 @@ export function NotificationBell() {
 
       {dropdownOpen && (
         <NotificationDropdown
-          notifications={notifications}
-          onMarkRead={handleMarkRead}
-          onMarkAllRead={handleMarkAllRead}
+          notifications={uiNotifications}
+          onMarkRead={markRead}
+          onMarkAllRead={markAllRead}
           onCloseDropdown={() => setDropdownOpen(false)}
         />
       )}

@@ -1,5 +1,5 @@
 from typing import Generator
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database.session import SessionLocal
@@ -20,6 +20,7 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 def get_current_user(
+    request: Request,
     db: Session = Depends(get_db),
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> User:
@@ -49,6 +50,8 @@ def get_current_user(
                 detail="User account is deactivated",
             )
             
+        # Store in request state for logging middleware access
+        request.state.user_id = str(user.id)
         return user
     except ValueError as e:
         raise HTTPException(

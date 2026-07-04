@@ -5,9 +5,12 @@ import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTheme } from "@/providers/ThemeProvider";
 
+import { useProfile } from "@/hooks/useProfile";
+
 export default function ProfilePage() {
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { updatePreferences } = useProfile();
 
   return (
     <PortalLayout>
@@ -85,7 +88,10 @@ export default function ProfilePage() {
           </div>
           <div className="grid grid-cols-3 gap-4">
             <button
-              onClick={() => setTheme("light")}
+              onClick={() => {
+                setTheme("light");
+                updatePreferences({ theme: "light" });
+              }}
               className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
                 theme === "light"
                   ? "border-emerald-600 bg-emerald-50/10 text-emerald-800 font-bold"
@@ -96,7 +102,10 @@ export default function ProfilePage() {
               <span className="text-xs">Light</span>
             </button>
             <button
-              onClick={() => setTheme("dark")}
+              onClick={() => {
+                setTheme("dark");
+                updatePreferences({ theme: "dark" });
+              }}
               className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
                 theme === "dark"
                   ? "border-emerald-600 bg-emerald-950/20 text-emerald-400 font-bold"
@@ -107,7 +116,10 @@ export default function ProfilePage() {
               <span className="text-xs">Dark</span>
             </button>
             <button
-              onClick={() => setTheme("system")}
+              onClick={() => {
+                setTheme("system");
+                updatePreferences({ theme: "system" });
+              }}
               className={`p-4 border rounded-xl flex flex-col items-center gap-2 cursor-pointer transition-all duration-150 ${
                 theme === "system"
                   ? "border-emerald-600 bg-emerald-50/10 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-400 font-bold"

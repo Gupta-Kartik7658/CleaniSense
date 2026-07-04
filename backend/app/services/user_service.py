@@ -21,12 +21,6 @@ class UserService:
         """
         Update fields on an existing user database record.
         """
-        update_data = obj_in.model_dump(exclude_unset=True)
-        for field in update_data:
-            setattr(db_obj, field, update_data[field])
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
+        return user_repository.update(db, db_obj, obj_in)
 
 user_service = UserService()

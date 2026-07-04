@@ -4,6 +4,44 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-04] Complete Backend Citizen Module & Operations Improvements
+Implemented the complete, production-grade Citizen Module backend and verification logic, adhering to FastAPI, clean API-Service-Repository patterns, and relational SQLite/PostgreSQL schemas.
+
+#### Relational Databases & Migrations
+- **Core Models**: Implemented SQLAlchemy 2.0 mapped columns for:
+  - `User` (extended with soft delete `is_deleted`, `deleted_at`, `deleted_by`)
+  - `UserPreference` (Theme, Language, Notifications toggles)
+  - `ComplaintCategory` (Dynamically editable category lookup table)
+  - `Municipality` (Municipal zone lookup tracking zone, district, state)
+  - `Complaint` (Soft-deleted reporting model including latitude, longitude, and category relationships)
+  - `ComplaintStatusHistory` (Audit trail log recording state transitions)
+  - `ComplaintAttachment` (MIME/size-checked image and document uploads metadata)
+  - `ResolutionReport` (Resolution details, actions, and evidence URLs)
+  - `Notification` (Transactional user notifications log)
+  - `Hotspot` (Environmental hotspots location tracking)
+- **Alembic Database Migrations**: Configured and initialized migration versions (supporting sqlite batch mode for local migration updates).
+- **Master Seed Script (`app/database/seed.py`)**: Scripted and seeded initial master category list (Waste Management, Air Pollution, etc.), AMC municipal zones, and active environmental hotspots.
+
+#### API Endpoints & Business Logic Services
+- **Aggregated Dashboard Route**: Implemented `GET /api/v1/dashboard` compiling user overview statistics, 5 recent complaints, nearby hotspots (based on Haversine formula calculation), unread notifications, and user preferences.
+- **RESTful Complaint Details**: Replaced query-string lookups with clean `/complaints/[id]` path routes.
+- **Diagnostics Health Monitoring**: Added `GET /api/v1/health` diagnostic endpoint exposing live status of the database and storage connections alongside application version, environment, and uptime metrics.
+- **Attachment Upload Limits**: Added binary content size validation (max 10MB) and content-type checks (JPEG/PNG/PDF), enforcing a maximum limit of 5 attachments per complaint.
+
+#### Middleware, Logging & Telemetry
+- **X-Request-ID Header Middleware**: Generates and response-injects unique correlation request IDs for tracing request lifecycles.
+- **Structured Telemetry Logs**: Customized the uvicorn formatter to inject request IDs (`[RID: request_id]`) and log execution duration, route path, HTTP verb, and authenticated user ID.
+- **Global Error Handling**: Formatted all unhandled exceptions, validation errors, and HTTP exceptions into a standardized JSON response envelope.
+- **Storage Cleanup**: Added `purge_orphaned_attachments` in the storage service for background cleanup tasks.
+
+#### Verification & Test Suites (25/25 Tests Passed)
+- Migrated all test files from `scratch/` into the `tests/` directory.
+- Created dedicated repository CRUD tests: `test_user_repository.py`, `test_complaint_repository.py`, and `test_notification_repository.py`.
+- Created authentication edge case tests: `test_auth.py` verifying missing headers, invalid/expired tokens, deactivated/soft-deleted users, and RoleChecker checks.
+- Confirmed all 25 unit tests pass successfully under clean dependency-override isolation.
+
+---
+
 ### [2026-07-03] Dashboard Primary Citizen Workflow & next-intl i18n
 Refined the Citizen Dashboard navigation to optimize reporting workflows, integrate RESTful routes, modularize notifications, and build out next-intl internationalization.
 

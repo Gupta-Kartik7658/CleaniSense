@@ -9,8 +9,11 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useTranslationUtility } from "@/providers/TranslationProvider";
 import { useTranslations } from "next-intl";
 
+import { useProfile } from "@/hooks/useProfile";
+
 export function PortalLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
+  const { preferences, updatePreferences } = useProfile();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { locale: currentLocale, changeLanguage } = useTranslationUtility();
@@ -22,6 +25,12 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
   const [notifEnabled, setNotifEnabled] = useState(true);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (preferences) {
+      setNotifEnabled(preferences.notifications_enabled);
+    }
+  }, [preferences]);
 
   // Validate session redirect
   useEffect(() => {
@@ -68,12 +77,13 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
 
   const selectLanguage = (code: string) => {
     changeLanguage(code);
+    updatePreferences({ language: code });
   };
 
   const toggleNotifications = () => {
     const newState = !notifEnabled;
     setNotifEnabled(newState);
-    localStorage.setItem("cleanisense_notif_enabled", String(newState));
+    updatePreferences({ notifications_enabled: newState });
   };
 
   if (loading) {
@@ -233,7 +243,10 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
                         {themes.map((t) => (
                           <button
                             key={t.value}
-                            onClick={() => setTheme(t.value as any)}
+                            onClick={() => {
+                              setTheme(t.value as any);
+                              updatePreferences({ theme: t.value });
+                            }}
                             className={`py-1 rounded border font-bold cursor-pointer transition-all ${
                               theme === t.value
                                 ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-450"

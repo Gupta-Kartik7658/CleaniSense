@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PortalLayout } from "@/components/dashboard/PortalLayout";
-import { mockDetailedReports } from "@/mock/dashboard";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
+import { useComplaints } from "@/hooks/useComplaints";
 
 export default function ComplaintsHistoryPage() {
   const [search, setSearch] = useState("");
@@ -12,16 +12,51 @@ export default function ComplaintsHistoryPage() {
     "All" | "Pending" | "Under Review" | "Resolved" | "Rejected"
   >("All");
 
-  const filteredReports = mockDetailedReports.filter((report) => {
-    const matchesSearch =
-      report.title.toLowerCase().includes(search.toLowerCase()) ||
-      report.locationName.toLowerCase().includes(search.toLowerCase()) ||
-      report.id.toLowerCase().includes(search.toLowerCase());
+  const { complaintsData, fetchHistory, loading, error } = useComplaints();
 
-    const matchesFilter = filter === "All" || report.status === filter;
+  const mapFilterToStatus = (f: string) => {
+    if (f === "Pending") return "submitted";
+    if (f === "Under Review") return "in_progress";
+    if (f === "Resolved") return "resolved";
+    if (f === "Rejected") return "rejected";
+    return undefined;
+  };
 
-    return matchesSearch && matchesFilter;
-  });
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchHistory({
+      search: search || undefined,
+      status: mapFilterToStatus(filter),
+      page: 1,
+      page_size: 100
+    }, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [search, filter, fetchHistory]);
+
+  const mapStatus = (status: string): "Pending" | "Under Review" | "Resolved" | "Rejected" => {
+    const lower = status.toLowerCase();
+    if (lower === "submitted" || lower === "draft") return "Pending";
+    if (lower === "resolved") return "Resolved";
+    if (lower === "rejected") return "Rejected";
+    return "Under Review";
+  };
+
+  const filteredReports = complaintsData
+    ? complaintsData.items.map((r) => ({
+        id: r.id,
+        title: r.title,
+        status: mapStatus(r.status),
+        locationName: r.location_name,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        date: r.created_at,
+        category: (r as any).category ? (r as any).category.name : "Other",
+        severity: r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : "Medium"
+      }))
+    : [];
 
   return (
     <PortalLayout>
@@ -80,7 +115,19 @@ export default function ComplaintsHistoryPage() {
         </div>
 
         {/* Complaints Listing */}
-        {filteredReports.length === 0 ? (
+        {loading ? (
+          <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20 flex flex-col items-center justify-center">
+            <svg className="animate-spin h-8 w-8 text-emerald-600 mb-2" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold">Loading history...</p>
+          </div>
+        ) : error ? (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-bold text-center">
+            {error}
+          </div>
+        ) : filteredReports.length === 0 ? (
           <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20">
             <span className="text-3xl block mb-2">📁</span>
             <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
