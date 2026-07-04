@@ -12,10 +12,18 @@ initialize_firebase()
 # Automatically create database tables on application start for local development
 Base.metadata.create_all(bind=engine)
 
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.middleware.logging_middleware import LoggingMiddleware
+from app.middleware.exception_handler import global_exception_handler
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+
+# Logging middleware registered first to wrap everything
+app.add_middleware(LoggingMiddleware)
 
 # CORS configurations
 app.add_middleware(
@@ -25,6 +33,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Exception handlers
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(RequestValidationError, global_exception_handler)
+app.add_exception_handler(StarletteHTTPException, global_exception_handler)
+
+# Serve uploaded files static route
+import os
+from fastapi.staticfiles import StaticFiles
+os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Register v1 router
 app.include_router(api_router, prefix=settings.API_V1_STR)

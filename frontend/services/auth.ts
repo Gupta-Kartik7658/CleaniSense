@@ -20,18 +20,14 @@ export interface ApiResponseEnvelope<T> {
 
 export const authService = {
   loginWithFirebase: async (idToken: string): Promise<User> => {
-    const response = await api.post<ApiResponseEnvelope<User>>("/auth/login", {
-      idToken,
-    });
-    return response.data.data;
+    return api.post("/auth/login", { idToken });
   },
 
   getCurrentUser: async (): Promise<User> => {
-    const response = await api.get<ApiResponseEnvelope<User>>("/auth/me");
-    return response.data.data;
+    return api.get("/auth/me");
   },
 
   logout: async (): Promise<void> => {
-    await api.post<ApiResponseEnvelope<null>>("/auth/logout");
+    return api.post("/auth/logout");
   },
 };

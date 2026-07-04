@@ -5,9 +5,13 @@ import { useRouter } from "next/navigation";
 import { signInWithPopup, signOut, onIdTokenChanged, User as FirebaseUser } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
 import { authService, User } from "../services/auth";
+import { profileService } from "../services/profile";
+import { ProfileResponse } from "../types/profile";
 
 interface AuthContextType {
   user: User | null;
+  profileData: ProfileResponse | null;
+  setProfileData: React.Dispatch<React.SetStateAction<ProfileResponse | null>>;
   loading: boolean;
   login: () => Promise<void>;
   logout: () => Promise<void>;
@@ -19,6 +23,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -38,9 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const backendUser = await authService.loginWithFirebase(token);
       setUser(backendUser);
+      const profile = await profileService.getProfile();
+      setProfileData(profile);
     } catch (error) {
       console.error("Session sync failed with FastAPI backend:", error);
       setUser(null);
+      setProfileData(null);
       document.cookie = "cleanisense_token=; path=/; max-age=0; SameSite=Lax";
       await signOut(auth);
     } finally {
@@ -63,6 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const backendUser = await authService.loginWithFirebase(token);
       setUser(backendUser);
+      const profile = await profileService.getProfile();
+      setProfileData(profile);
       router.push("/dashboard");
     } catch (error) {
       console.error("Authentication popup login failed:", error);
@@ -100,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, refreshUser, isAuthenticated }}
+      value={{ user, profileData, setProfileData, loading, login, logout, refreshUser, isAuthenticated }}
     >
       {children}
     </AuthContext.Provider>
