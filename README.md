@@ -7,7 +7,7 @@ CleaniSense combines citizen reports, image analysis, weather conditions, air qu
 ## Technology Stack
 
 - **Frontend**: Next.js 15 (App Router), TypeScript, Tailwind CSS
-- **Backend**: FastAPI, SQLAlchemy, Alembic, Pydantic (v2)
+- **Backend**: FastAPI, SQLAlchemy, Pydantic (v2)
 - **Database**: SQLite (Local Dev) / PostgreSQL (Staging/Prod)
 
 ## Project Directory Structure

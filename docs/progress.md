@@ -4,6 +4,22 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-06] Remove Alembic Migrations, Resolve Auth Race Condition & Workspace Cleanup
+
+#### Alembic Database Migrations Removal
+- **Metadata Creation Sole Source of Truth**: Replaced Alembic migration version control completely with `Base.metadata.create_all(bind=engine)` inside `backend/app/main.py`.
+- **Obsolete Files Purge**: Deleted all legacy Alembic versions, migration structures, configuration files (`alembic.ini`), and requirements.
+- **Script Cleanup**: Updated `backend/reset_db.py` to remove legacy manual drops of `alembic_version` table and updated registry files to reference pure SQLAlchemy schema creation.
+
+#### Frontend Authentication Race Condition Fix
+- **Axios Interceptor Fix**: Updated the request error interceptor in `frontend/lib/api.ts` to check `axios.isCancel(error)` and immediately reject canceled/aborted connections without wrapping them in generic `"An unexpected error occurred"` error templates.
+- **Hook Guard Integration**: Modified the catch block in the `useComplaints` hook (`frontend/hooks/useComplaints.ts`) to check `axios.isCancel(err)` and ignore canceled requests (preventing unmount/remount aborts from populating the user-facing error state). Added `setError(null)` reset triggers on successful API calls.
+- **Details Page Guard**: Injected `useAuth()` into `frontend/app/complaints/[id]/page.tsx` to delay triggering `fetchDetail` requests until `user` and `authLoading` states are fully initialized.
+
+#### Cleanup & Workspace Maintenance
+- **Leftover Script Purge**: Cleaned up temporary test run files (`test_422.py`, `test_get_complaints.py`, `test_get_complaints_params.py`, `test_validation.py`) from the root workspace directory.
+- **Debug Log Purge**: Removed all temporary backend debug logs and console statement overrides.
+
 ### [2026-07-04] Complete Frontend-Backend Integration & Demo Data Removal
 Integrated all frontend pages with backend RESTful APIs, decoupled mock files into a production-style architecture, and verified behavior on clean database states.
 

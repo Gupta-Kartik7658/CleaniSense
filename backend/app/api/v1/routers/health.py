@@ -33,6 +33,9 @@ def health_check(db: Session = Depends(get_db)):
             import os
             if not os.path.exists(settings.UPLOAD_DIR):
                 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+        elif settings.STORAGE_BACKEND == "supabase":
+            if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+                storage_status = "misconfigured (missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)"
         elif settings.STORAGE_BACKEND == "firebase" and not settings.FIREBASE_STORAGE_BUCKET:
             storage_status = "connected (fallback mode)"
     except Exception as e:

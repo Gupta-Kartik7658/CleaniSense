@@ -113,6 +113,9 @@ class TestProfile(unittest.TestCase):
         response = client.put("/api/v1/profile/preferences", json={"language": "invalid"})
         self.assertEqual(response.status_code, 422)
 
+        # Reset preferences to avoid state leakage
+        client.put("/api/v1/profile/preferences", json={"language": "en", "theme": "light", "notifications_enabled": True})
+
     def test_dashboard_config(self):
         response = client.get("/api/v1/config")
         self.assertEqual(response.status_code, 200)
@@ -272,7 +275,8 @@ class TestComplaints(unittest.TestCase):
         self.assertTrue(data["success"])
         self.assertEqual(data["data"]["file_name"], "test_pic.jpg")
         self.assertEqual(data["data"]["file_type"], "image")
-        self.assertEqual(data["data"]["storage_provider"], "local")
+        from app.core.config import settings
+        self.assertEqual(data["data"]["storage_provider"], settings.STORAGE_BACKEND)
 
         # 3. Get complaint details to assert attachments list includes this item
         res_detail = client.get(f"/api/v1/complaints/{complaint_id}")
