@@ -5,6 +5,7 @@ import { useDashboard } from "@/hooks/useDashboard";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { ReportHero } from "@/components/dashboard/ReportHero";
 import { OverviewSection } from "@/components/dashboard/OverviewSection";
+import { ComplaintMapSection } from "@/components/dashboard/ComplaintMapSection";
 import { ReportsSection } from "@/components/dashboard/reports/ReportsSection";
 import { HotspotSection } from "@/components/dashboard/hotspots/HotspotSection";
 
@@ -29,7 +30,12 @@ export default function DashboardPage() {
         <OverviewSection summary={data?.summary} loading={loading} />
       )}
 
-      {/* 4. Split Two-Column Layout (Desktop) */}
+      {/* Complaint geo graph with 50m hotspot clustering */}
+      {!error && (
+        <ComplaintMapSection mapData={data?.complaintMap} loading={loading} />
+      )}
+
+      {/* Split Two-Column Layout (Desktop) */}
       {!error && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           

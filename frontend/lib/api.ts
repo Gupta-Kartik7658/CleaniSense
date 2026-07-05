@@ -41,7 +41,18 @@ api.interceptors.response.use(
     const status = error.response?.status;
     let message = "An unexpected error occurred. Please try again.";
     
-    if (error.response?.data && error.response.data.message) {
+    if (status === 422) {
+      const details = error.response?.data?.error?.details;
+      if (Array.isArray(details) && details.length > 0) {
+        message = details
+          .map((d: { field?: string; message?: string }) =>
+            `${d.field ?? "field"}: ${d.message ?? "invalid"}`
+          )
+          .join(" · ");
+      } else {
+        message = "Input validation failed. Please check your submitted details.";
+      }
+    } else if (error.response?.data?.message) {
       message = error.response.data.message;
     } else if (status === 401) {
       message = "Your session has expired or is invalid. Please log in again.";
@@ -49,8 +60,6 @@ api.interceptors.response.use(
       message = "You do not have permission to access this resource.";
     } else if (status === 404) {
       message = "Requested resource not found.";
-    } else if (status === 422) {
-      message = "Input validation failed. Please check your submitted details.";
     } else if (status >= 500) {
       message = "A server error occurred. Please try again later.";
     }

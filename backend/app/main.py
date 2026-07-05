@@ -12,6 +12,10 @@ initialize_firebase()
 # Automatically create database tables on application start for local development
 Base.metadata.create_all(bind=engine)
 
+# Seed master data (categories, municipalities) if missing
+from app.database.seed import seed_db
+seed_db()
+
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.middleware.logging_middleware import LoggingMiddleware

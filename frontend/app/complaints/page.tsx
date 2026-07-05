@@ -6,13 +6,11 @@ import { useComplaints } from "@/hooks/useComplaints";
 import { configService } from "@/services/config";
 import { CategoryResponse } from "@/types/config";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
-import { useDashboard } from "@/hooks/useDashboard";
 import { useRouter } from "next/navigation";
 
 export default function ComplaintsPage() {
   const router = useRouter();
   const { coords, loading: loadingLocation } = useCurrentLocation();
-  const { refreshDashboard } = useDashboard();
   const { createComplaint, loading: submitting, error: submitError } = useComplaints();
 
   // Categories and configurations configuration
@@ -36,19 +34,25 @@ export default function ComplaintsPage() {
   const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   // Load config on mount
+  const [configError, setConfigError] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchConfig = async () => {
       try {
+        setConfigError(null);
         const config = await configService.getConfig();
         setCategories(config.categories);
         if (config.categories.length > 0) {
           setCategoryId(config.categories[0].id);
+        } else {
+          setConfigError("No complaint categories are configured. Please contact support or try again later.");
         }
         setMaxUploadSizeMb(config.max_upload_size_mb || 10);
         setAllowedTypes(config.allowed_file_types || ["image/jpeg", "image/png", "application/pdf"]);
         setMaxAttachments(config.max_attachments || 5);
       } catch (err) {
         console.error("Failed to load configurations:", err);
+        setConfigError("Failed to load categories. Check that the backend is running.");
       } finally {
         setConfigLoading(false);
       }
@@ -97,19 +101,39 @@ export default function ComplaintsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!categoryId || !title || !description || !locationName || !lat || !lng) {
+
+    const parsedLat = parseFloat(lat);
+    const parsedLng = parseFloat(lng);
+
+    if (!categoryId || !title.trim() || !description.trim() || !locationName.trim() || !lat || !lng) {
+      return;
+    }
+
+    if (title.trim().length < 5) {
+      return;
+    }
+
+    if (description.trim().length < 20) {
+      return;
+    }
+
+    if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+      return;
+    }
+
+    if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
       return;
     }
 
     try {
       const complaint = await createComplaint(
         {
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           category_id: categoryId,
-          location_name: locationName,
-          latitude: parseFloat(lat),
-          longitude: parseFloat(lng)
+          location_name: locationName.trim(),
+          latitude: parsedLat,
+          longitude: parsedLng
         },
         selectedFiles
       );
@@ -119,7 +143,6 @@ export default function ComplaintsPage() {
 
       // Wait 1.5 seconds for visual feedback, refresh dashboard, and redirect
       setTimeout(() => {
-        refreshDashboard();
         router.push(`/complaints/${complaint.id}`);
       }, 1500);
 
@@ -160,6 +183,12 @@ export default function ComplaintsPage() {
         ) : (
           <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
             
+            {configError && (
+              <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-900 dark:text-amber-300 rounded-xl text-xs font-semibold">
+                ⚠️ {configError}
+              </div>
+            )}
+
             {submitError && (
               <div className="p-4 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold">
                 ⚠️ {submitError}
@@ -169,7 +198,7 @@ export default function ComplaintsPage() {
             {/* Title */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Issue Title
+                Issue Title <span className="text-slate-400 font-normal">(min 5 characters)</span>
               </label>
               <input
                 type="text"
@@ -177,6 +206,8 @@ export default function ComplaintsPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
+                minLength={5}
+                maxLength={500}
                 className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
               />
             </div>
@@ -190,20 +221,25 @@ export default function ComplaintsPage() {
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 required
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                disabled={categories.length === 0}
+                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.icon} {c.name}
-                  </option>
-                ))}
+                {categories.length === 0 ? (
+                  <option value="">No categories available</option>
+                ) : (
+                  categories.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
             {/* Description */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Description
+                Description <span className="text-slate-400 font-normal">(min 20 characters)</span>
               </label>
               <textarea
                 placeholder="Provide a detailed description of the pollution issue, source, and severity..."
@@ -211,6 +247,7 @@ export default function ComplaintsPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 required
+                minLength={20}
                 className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
               />
             </div>
@@ -342,7 +379,7 @@ export default function ComplaintsPage() {
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || categories.length === 0}
                 className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-500 text-white font-bold py-2.5 px-6 rounded-xl shadow-sm transition-colors text-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 {submitting ? (
