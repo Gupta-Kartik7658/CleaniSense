@@ -4,7 +4,10 @@ def get_storage_client():
     """
     Factory function to retrieve configured storage client backend.
     """
-    if settings.STORAGE_BACKEND == "firebase":
+    if settings.STORAGE_BACKEND == "supabase":
+        from app.storage.supabase_storage import SupabaseStorage
+        return SupabaseStorage()
+    elif settings.STORAGE_BACKEND == "firebase":
         from app.storage.firebase_storage import FirebaseStorage
         return FirebaseStorage()
     else:

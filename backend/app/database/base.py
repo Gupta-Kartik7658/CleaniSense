@@ -1,4 +1,4 @@
-# Import all models here so that Alembic can detect them automatically
+# Import all models here so that SQLAlchemy Base.metadata can create them automatically
 from app.database.base_class import Base # noqa
 from app.models.user import User # noqa
 from app.models.user_preference import UserPreference # noqa

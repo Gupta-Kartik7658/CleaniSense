@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import axios from "axios";
 import { complaintService, ComplaintsQueryResponse } from "../services/complaint";
 import { ComplaintDetailResponse, ComplaintCreatePayload, ResolutionResponse } from "../types/complaint";
 
@@ -27,11 +28,11 @@ export function useComplaints() {
     setError(null);
     try {
       const data = await complaintService.getComplaints(params, signal);
+      setError(null);
       setComplaintsData(data);
     } catch (err: any) {
-      if (err.name !== "CanceledError" && err.name !== "AbortError") {
-        setError(err.message || "Failed to fetch complaints list.");
-      }
+      if (axios.isCancel(err)) return;
+      setError(err.message || "Failed to fetch complaints list.");
     } finally {
       setLoading(false);
     }
@@ -42,6 +43,7 @@ export function useComplaints() {
     setError(null);
     try {
       const detail = await complaintService.getComplaintDetail(id, signal);
+      setError(null);
       setComplaintDetail(detail);
       
       // If status is resolved, also load resolution report
@@ -56,9 +58,8 @@ export function useComplaints() {
         setResolutionDetail(null);
       }
     } catch (err: any) {
-      if (err.name !== "CanceledError" && err.name !== "AbortError") {
-        setError(err.message || "Failed to load complaint detail.");
-      }
+      if (axios.isCancel(err)) return;
+      setError(err.message || "Failed to load complaint detail.");
     } finally {
       setLoading(false);
     }

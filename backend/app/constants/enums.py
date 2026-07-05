@@ -44,6 +44,7 @@ class UploadSource(str, Enum):
     MUNICIPALITY = "municipality"
 
 class StorageProvider(str, Enum):
+    SUPABASE = "supabase"
     FIREBASE = "firebase"
     LOCAL = "local"
     GCS = "gcs"

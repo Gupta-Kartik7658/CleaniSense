@@ -5,6 +5,7 @@ import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
+import { useAuth } from "@/providers/AuthProvider";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -12,17 +13,18 @@ interface PageProps {
 
 export default function ComplaintDetailsPage({ params }: PageProps) {
   const { id } = use(params);
+  const { user, loading: authLoading } = useAuth();
   const { complaintDetail, resolutionDetail, fetchDetail, loading, error } = useComplaints();
 
   useEffect(() => {
     const controller = new AbortController();
-    if (id) {
+    if (id && user && !authLoading) {
       fetchDetail(id, controller.signal);
     }
     return () => {
       controller.abort();
     };
-  }, [id, fetchDetail]);
+  }, [id, user, authLoading, fetchDetail]);
 
   const mapStatus = (status: string): "Pending" | "Under Review" | "Resolved" | "Rejected" => {
     const lower = status.toLowerCase();
@@ -49,7 +51,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
           </Link>
         </div>
 
-        {loading ? (
+        {authLoading || loading ? (
           <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20 flex flex-col items-center justify-center">
             <svg className="animate-spin h-8 w-8 text-emerald-600 mb-2" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

@@ -44,7 +44,7 @@ export default function ComplaintsHistoryPage() {
     return "Under Review";
   };
 
-  const filteredReports = complaintsData
+  const filteredReports = complaintsData && complaintsData.items
     ? complaintsData.items.map((r) => ({
         id: r.id,
         title: r.title,
