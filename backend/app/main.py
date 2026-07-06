@@ -5,12 +5,19 @@ from app.api.v1 import api_router
 from app.database.session import engine
 from app.database.base import Base
 from app.core.firebase import initialize_firebase
+import logging
 
 # Initialize Firebase Admin SDK
 initialize_firebase()
 
-# Automatically create database tables on application start for local development
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger("uvicorn")
+
+# Automatically create database tables on application start for local development.
+# Keep non-database routes available even if the local SQLite file is unhealthy.
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    logger.warning(f"Database bootstrap skipped due to startup error: {exc}")
 
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
