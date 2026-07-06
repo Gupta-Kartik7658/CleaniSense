@@ -46,11 +46,12 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(RequestValidationError, global_exception_handler)
 app.add_exception_handler(StarletteHTTPException, global_exception_handler)
 
-# Serve uploaded files static route
+# Serve uploaded files static route (only for local storage backend)
 import os
 from fastapi.staticfiles import StaticFiles
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+if settings.STORAGE_BACKEND == "local":
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Register v1 router
 app.include_router(api_router, prefix=settings.API_V1_STR)

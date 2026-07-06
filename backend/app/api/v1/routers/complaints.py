@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
@@ -17,6 +18,8 @@ from app.services.storage_service import storage_service
 from app.utils.response import standard_response, StandardResponseModel
 from app.utils.pagination import PaginatedResponseModel
 
+logger = logging.getLogger("uvicorn")
+
 router = APIRouter(prefix="/complaints", tags=["complaints"])
 
 @router.post("", response_model=StandardResponseModel, status_code=status.HTTP_201_CREATED, summary="Submit Environmental Complaint", description="Registers a new environmental incident report in the system.")
@@ -28,7 +31,12 @@ def create_complaint(
     """
     Submit a new environmental complaint.
     """
+    logger.info(
+        f"Creating complaint — user={current_user.id} "
+        f"category={complaint_in.category_id} title='{complaint_in.title[:50]}'"
+    )
     complaint = complaint_service.create_complaint(db, complaint_in, current_user.id)
+    logger.info(f"Complaint created — id={complaint.id} status={complaint.status}")
     complaint_data = ComplaintResponse.model_validate(complaint)
     return standard_response(
         success=True,
@@ -51,6 +59,10 @@ def list_complaints(
     """
     Get user's complaints with basic pagination and advanced filtering.
     """
+    logger.info(
+        f"Listing complaints — user={current_user.id} page={page} "
+        f"status={status_filter} category={category_id} search='{search}'"
+    )
     paginated_data = complaint_service.get_history(
         db=db,
         user_id=current_user.id,
@@ -63,6 +75,7 @@ def list_complaints(
         page_size=page_size
     )
     paginated_data["items"] = [ComplaintResponse.model_validate(item) for item in paginated_data["items"]]
+    logger.info(f"Listed {len(paginated_data['items'])} complaints for user={current_user.id}")
     return standard_response(
         success=True,
         message="Complaints retrieved successfully",
@@ -78,6 +91,7 @@ def get_complaint_detail(
     """
     Retrieve full complaint details including category, municipality, timeline, attachments, and resolution.
     """
+    logger.info(f"Fetching complaint detail — id={id} user={current_user.id}")
     complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
     detail_data = ComplaintDetailResponse.model_validate(complaint)
     return standard_response(
@@ -96,7 +110,12 @@ def update_complaint(
     """
     Update complaint details. Only permitted if status is 'draft' or 'submitted'.
     """
+    logger.info(
+        f"Updating complaint — id={id} user={current_user.id} "
+        f"fields={complaint_in.model_dump(exclude_unset=True).keys()}"
+    )
     complaint = complaint_service.update_complaint(db, id, complaint_in, current_user.id)
+    logger.info(f"Complaint updated — id={id}")
     complaint_data = ComplaintResponse.model_validate(complaint)
     return standard_response(
         success=True,
@@ -113,7 +132,9 @@ def cancel_complaint(
     """
     Soft-delete a complaint. Only permitted if status is 'draft' or 'submitted'.
     """
+    logger.info(f"Cancelling complaint — id={id} user={current_user.id}")
     complaint = complaint_service.cancel_complaint(db, id, current_user.id)
+    logger.info(f"Complaint cancelled — id={id}")
     return standard_response(
         success=True,
         message="Complaint deleted successfully",
@@ -130,12 +151,17 @@ async def upload_complaint_attachment(
     """
     Upload an attachment file (image/pdf) to a complaint.
     """
+    logger.info(
+        f"Uploading attachment — complaint={id} user={current_user.id} "
+        f"filename='{file.filename}' content_type='{file.content_type}'"
+    )
     # Verify ownership of complaint before upload
     complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
     
     # Read file content
     content = await file.read()
     size = len(content)
+    logger.info(f"Attachment read — size={size} bytes")
     
     # Delegate upload and database persistence to storage service
     attachment = storage_service.upload_attachment(
@@ -147,6 +173,7 @@ async def upload_complaint_attachment(
         file_size_bytes=size
     )
     
+    logger.info(f"Attachment saved — id={attachment.id} provider={attachment.storage_provider}")
     attachment_data = AttachmentResponse.model_validate(attachment)
     return standard_response(
         success=True,
@@ -163,10 +190,12 @@ def get_complaint_resolution(
     """
     Get resolution report for a resolved complaint.
     """
+    logger.info(f"Fetching resolution — complaint={id} user={current_user.id}")
     from app.constants.enums import ComplaintStatus
     
     complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
     if complaint.status != ComplaintStatus.RESOLVED.value or not complaint.resolution:
+        logger.warning(f"Resolution not found — complaint={id} status={complaint.status}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Resolution report not found for this complaint"

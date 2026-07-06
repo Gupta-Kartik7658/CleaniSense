@@ -32,6 +32,12 @@ class LocalStorage:
         
         return "local", relative_path, public_url
 
+    def get_public_url(self, storage_path: str) -> str:
+        """
+        Returns the local static-file URL for the given storage path.
+        """
+        return f"/uploads/{storage_path}"
+
     def delete_file(self, storage_path: str) -> bool:
         """
         Removes file from local uploads directory.

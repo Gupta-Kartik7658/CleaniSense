@@ -3,7 +3,7 @@ from firebase_admin import auth
 from sqlalchemy.orm import Session
 from app.core.firebase import initialize_firebase
 from app.services.user_service import user_service
-from app.schemas.user import UserCreate
+from app.schemas.user import UserCreate, UserUpdate
 from app.models.user import User
 
 logger = logging.getLogger("uvicorn")
@@ -36,8 +36,21 @@ class AuthService:
         if not firebase_uid or not email:
             raise ValueError("Firebase token is missing required claims (uid, email)")
 
+        # Search by firebase_uid first, then by email to handle existing accounts
         user = user_service.get_user_by_firebase_uid(db, firebase_uid)
         if not user:
+            user = user_service.get_user_by_email(db, email)
+
+        if user:
+            # Update mutable fields on existing user (idempotent)
+            update_data = UserUpdate(
+                firebase_uid=firebase_uid,
+                name=name,
+                profile_picture=picture,
+            )
+            user = user_service.update_user(db, user, update_data)
+            logger.info(f"Updated existing user: {email}")
+        else:
             # First time logging in: register the user as a citizen
             user_in = UserCreate(
                 firebase_uid=firebase_uid,

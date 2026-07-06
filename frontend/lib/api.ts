@@ -37,6 +37,11 @@ api.interceptors.response.use(
     return response.data;
   },
   (error) => {
+    // If request was canceled, let it propagate unmodified so hooks can recognize it
+    if (axios.isCancel(error)) {
+      return Promise.reject(error);
+    }
+
     // Centralized error mapping based on HTTP status codes and backend envelopes
     const status = error.response?.status;
     let message = "An unexpected error occurred. Please try again.";

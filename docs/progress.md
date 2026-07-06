@@ -4,6 +4,39 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-06] Remove Alembic Migrations, Resolve Auth Race Condition & Workspace Cleanup
+
+#### Alembic Database Migrations Removal
+- **Metadata Creation Sole Source of Truth**: Replaced Alembic migration version control completely with `Base.metadata.create_all(bind=engine)` inside `backend/app/main.py`.
+- **Obsolete Files Purge**: Deleted all legacy Alembic versions, migration structures, configuration files (`alembic.ini`), and requirements.
+- **Script Cleanup**: Updated `backend/reset_db.py` to remove legacy manual drops of `alembic_version` table and updated registry files to reference pure SQLAlchemy schema creation.
+
+#### Frontend Authentication Race Condition Fix
+- **Axios Interceptor Fix**: Updated the request error interceptor in `frontend/lib/api.ts` to check `axios.isCancel(error)` and immediately reject canceled/aborted connections without wrapping them in generic `"An unexpected error occurred"` error templates.
+- **Hook Guard Integration**: Modified the catch block in the `useComplaints` hook (`frontend/hooks/useComplaints.ts`) to check `axios.isCancel(err)` and ignore canceled requests (preventing unmount/remount aborts from populating the user-facing error state). Added `setError(null)` reset triggers on successful API calls.
+- **Details Page Guard**: Injected `useAuth()` into `frontend/app/complaints/[id]/page.tsx` to delay triggering `fetchDetail` requests until `user` and `authLoading` states are fully initialized.
+
+#### Cleanup & Workspace Maintenance
+- **Leftover Script Purge**: Cleaned up temporary test run files (`test_422.py`, `test_get_complaints.py`, `test_get_complaints_params.py`, `test_validation.py`) from the root workspace directory.
+- **Debug Log Purge**: Removed all temporary backend debug logs and console statement overrides.
+
+### [2026-07-04] Complete Frontend-Backend Integration & Demo Data Removal
+Integrated all frontend pages with backend RESTful APIs, decoupled mock files into a production-style architecture, and verified behavior on clean database states.
+
+#### Frontend-Backend Service Integration
+- **Citizen Dashboard**: Hooked `useDashboard()` to dynamic statistics counts, reports lists, and nearby hotspots.
+- **Dynamic Preferences Sync**: Connected layout theme switches, language selections, and notifications preference toggles directly to sync preferences with the backend database.
+- **On-Demand Notifications Feed**: Wired the notification bell to fetch unread feed on-demand only when the dropdown is toggled.
+- **Reporting Form**: Implemented dynamic category lists from `/config`, geolocation auto-sync, client-side constraints (size, formats), concurrent media uploads (`Promise.all`), success toast feedback, and redirects.
+- **History List Querying**: Connected search, pagination, and status filters in the history view to query strings hitting the unified `/api/v1/complaints` route.
+- **Details Timeline**: Visualized dynamic audit logs, attachment lists, and resolved side-by-side evidence images.
+
+#### Complete Demo Data Purge
+- **Mock Folder Deletion**: Deleted the entire `frontend/mock/` folder and removed all dependencies.
+- **Clean DB Seeding**: Removed preloaded active hotspots (`HOTSPOTS_SEED`) from database seed configurations.
+- **Test Transaction Isolation**: Updated profile test setup to dynamically seed local hotspots within isolated test transactions.
+- **Next.js Production Build**: Verified compile-time Next.js configuration builds successfully with no compiler or type warnings.
+
 ### [2026-07-04] Complete Backend Citizen Module & Operations Improvements
 Implemented the complete, production-grade Citizen Module backend and verification logic, adhering to FastAPI, clean API-Service-Repository patterns, and relational SQLite/PostgreSQL schemas.
 

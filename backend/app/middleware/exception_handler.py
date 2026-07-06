@@ -1,5 +1,6 @@
 import logging
 import traceback
+import json
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -23,6 +24,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
         elif exc.status_code == status.HTTP_409_CONFLICT:
             error_code = "CONFLICT"
 
+        logger.warning(
+            f"HTTPException {exc.status_code} on {request.method} {request.url.path} — {exc.detail}"
+        )
+
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -37,13 +42,38 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
 
     # 2. Handle Pydantic request validation exceptions
     if isinstance(exc, RequestValidationError):
+        # Log the full request body and raw Pydantic errors for debugging
+        try:
+            body = await request.body()
+            body_str = body.decode("utf-8", errors="replace")
+            # Truncate very large bodies to 2000 chars for log readability
+            if len(body_str) > 2000:
+                body_str = body_str[:2000] + "... [TRUNCATED]"
+            logger.error(
+                f"Validation failed on {request.method} {request.url.path} | "
+                f"Body: {body_str}"
+            )
+        except Exception:
+            logger.error(
+                f"Validation failed on {request.method} {request.url.path} | "
+                f"Body: [unreadable]"
+            )
+
+        raw_errors = exc.errors()
+        logger.error(
+            f"Validation errors: {json.dumps(raw_errors, indent=2, default=str)}"
+        )
+
         details = []
-        for error in exc.errors():
+        for error in raw_errors:
             loc = error.get("loc", [])
             field = str(loc[-1]) if loc else "unknown"
             details.append({
                 "field": field,
-                "message": error.get("msg", "Invalid value")
+                "message": error.get("msg", "Invalid value"),
+                "type": error.get("type", "unknown"),
+                "location": [str(l) for l in loc],
+                "input": str(error.get("input", ""))[:200]  # truncate huge inputs
             })
 
         return JSONResponse(
@@ -60,7 +90,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> Response
 
     # 3. Handle unhandled internal service exceptions
     # Log traceback correlation
-    logger.error(f"Unhandled Exception: {str(exc)}\n{traceback.format_exc()}")
+    logger.error(
+        f"Unhandled Exception on {request.method} {request.url.path}: "
+        f"{type(exc).__name__}: {str(exc)}\n{traceback.format_exc()}"
+    )
     
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
