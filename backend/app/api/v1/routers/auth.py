@@ -16,7 +16,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
     try:
         decoded_token = auth_service.verify_firebase_token(request.idToken)
-        user = auth_service.authenticate_user(db, decoded_token)
+        user = auth_service.authenticate_user(db, decoded_token, role=request.role)
         user_data = UserResponse.model_validate(user)
         return standard_response(
             success=True,

@@ -79,20 +79,23 @@ def get_current_user(
         )
 
 class RoleChecker:
-    def __init__(self, allowed_role: str):
-        self.allowed_role = allowed_role
+    def __init__(self, allowed_roles: list[str] | str):
+        if isinstance(allowed_roles, str):
+            self.allowed_roles = [allowed_roles]
+        else:
+            self.allowed_roles = allowed_roles
 
     def __call__(self, current_user: User = Depends(get_current_user)) -> User:
-        if current_user.role != self.allowed_role:
+        if current_user.role not in self.allowed_roles:
             logger.warning(
                 f"[Auth] Role check failed — user={current_user.id} "
-                f"role={current_user.role} required={self.allowed_role}"
+                f"role={current_user.role} required={self.allowed_roles}"
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Operation restricted to users with the '{self.allowed_role}' role.",
+                detail=f"Operation restricted to users with one of the following roles: {self.allowed_roles}.",
             )
         return current_user
 
-require_admin = RoleChecker("admin")
+require_admin = RoleChecker(["admin", "super_admin", "municipality_admin", "municipality_officer"])
 require_citizen = RoleChecker("citizen")

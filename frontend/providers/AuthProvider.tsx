@@ -13,7 +13,7 @@ interface AuthContextType {
   profileData: ProfileResponse | null;
   setProfileData: React.Dispatch<React.SetStateAction<ProfileResponse | null>>;
   loading: boolean;
-  login: () => Promise<void>;
+  login: (requestedRole?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const token = await firebaseUser.getIdToken();
       // Set token cookie to allow Next.js middleware route intercept checks
-      document.cookie = `cleanisense_token=${token}; path=/; max-age=3600; SameSite=Lax; Secure`;
+      document.cookie = `cleanisense_token=${token}; path=/; max-age=31536000; SameSite=Lax; Secure`;
       
       const backendUser = await authService.loginWithFirebase(token);
       setUser(backendUser);
@@ -61,19 +61,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const login = async () => {
+  const login = async (requestedRole?: string) => {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const token = await result.user.getIdToken();
       
-      document.cookie = `cleanisense_token=${token}; path=/; max-age=3600; SameSite=Lax; Secure`;
+      document.cookie = `cleanisense_token=${token}; path=/; max-age=31536000; SameSite=Lax; Secure`;
       
-      const backendUser = await authService.loginWithFirebase(token);
+      const backendUser = await authService.loginWithFirebase(token, requestedRole);
       setUser(backendUser);
       const profile = await profileService.getProfile();
       setProfileData(profile);
-      router.push("/dashboard");
+      if (requestedRole && requestedRole !== 'citizen') {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error) {
       console.error("Authentication popup login failed:", error);
       throw error;
