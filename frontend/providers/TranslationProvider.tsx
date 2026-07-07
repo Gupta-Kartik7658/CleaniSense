@@ -2,6 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { NextIntlClientProvider } from "next-intl";
+import en from "../locales/en.json";
+import hi from "../locales/hi.json";
+import gu from "../locales/gu.json";
+import bn from "../locales/bn.json";
+import ta from "../locales/ta.json";
+import te from "../locales/te.json";
+
+const LOCALE_MESSAGES: Record<string, typeof en> = { en, hi, gu, bn, ta, te };
 
 interface TranslationContextType {
   locale: string;
@@ -11,40 +19,27 @@ interface TranslationContextType {
 
 const TranslationContext = createContext<TranslationContextType | undefined>(undefined);
 
+function getMessages(lang: string) {
+  return LOCALE_MESSAGES[lang] ?? LOCALE_MESSAGES.en;
+}
+
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocale] = useState("en");
-  const [messages, setMessages] = useState<any>(null);
+  const [messages, setMessages] = useState<typeof en | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const loadMessages = async (lang: string) => {
-    try {
-      const msgs = await import(`../locales/${lang}.json`);
-      return msgs.default;
-    } catch (err) {
-      console.warn(`Failed to load locale '${lang}', falling back to 'en'`, err);
-      const fallbackMsgs = await import("../locales/en.json");
-      return fallbackMsgs.default;
-    }
-  };
-
   useEffect(() => {
-    const initializeTranslation = async () => {
-      const savedLang = localStorage.getItem("cleanisense_lang") || "en";
-      setLocale(savedLang);
-      const msgs = await loadMessages(savedLang);
-      setMessages(msgs);
-      setLoading(false);
-    };
-
-    initializeTranslation();
+    const savedLang = localStorage.getItem("cleanisense_lang") || "en";
+    setLocale(savedLang);
+    setMessages(getMessages(savedLang));
+    setLoading(false);
   }, []);
 
   const changeLanguage = async (newLocale: string) => {
     setLoading(true);
     setLocale(newLocale);
     localStorage.setItem("cleanisense_lang", newLocale);
-    const msgs = await loadMessages(newLocale);
-    setMessages(msgs);
+    setMessages(getMessages(newLocale));
     setLoading(false);
   };
 
