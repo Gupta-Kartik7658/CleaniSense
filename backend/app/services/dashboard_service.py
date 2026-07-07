@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.complaint import Complaint
 from app.repositories.complaint import complaint_repository
+from app.services.complaint_cluster_service import complaint_cluster_service
 from app.services.hotspot_service import hotspot_service
 from app.services.notification_service import notification_service
 from app.services.preference_service import preference_service
@@ -73,6 +74,9 @@ class DashboardService:
         # Retrieve user preferences
         prefs = preference_service.get_or_create_preferences(db, user_id)
 
+        # Geospatial complaint map with 50m hotspot clustering
+        complaint_map = complaint_cluster_service.get_user_complaint_map(db, user_id)
+
         return {
             "overview": {
                 "total_reports": total_reports,
@@ -82,6 +86,7 @@ class DashboardService:
             },
             "recent_reports": recent_items,
             "nearby_hotspots": nearby_hotspots_list,
+            "complaint_map": complaint_map,
             "unread_notifications": unread_notifications,
             "preferences": {
                 "language": prefs.language,

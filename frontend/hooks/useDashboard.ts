@@ -56,6 +56,7 @@ export function useDashboard() {
         ],
         reports: mappedReports,
         hotspots: mappedHotspots,
+        complaintMap: backendData.complaint_map,
         unreadNotifications: backendData.unread_notifications
       };
 
