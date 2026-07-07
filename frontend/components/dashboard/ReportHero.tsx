@@ -8,61 +8,66 @@ export function ReportHero() {
   const t = useTranslations("dashboard.hero");
 
   return (
-    <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-sm overflow-hidden text-left p-6 md:p-8 transition-colors duration-150">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-        
-        {/* Left Side Copy and CTAs */}
-        <div className="lg:col-span-7 space-y-4">
-          <h3 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            {t("title")}
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-650 dark:text-slate-350 leading-relaxed max-w-xl">
-            {t("subtitle")}
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <Link
-              href="/complaints"
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-center text-xs py-3 px-6 rounded-xl shadow-md shadow-emerald-600/10 hover:shadow-lg transition-all duration-150 cursor-pointer"
-            >
+    <div className="hero-card topo-grid relative overflow-hidden text-left">
+      <div className="relative z-10 grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+        <div className="space-y-5">
+          <span className="page-kicker">Available Today</span>
+          <div className="space-y-3">
+            <h3 className="text-[clamp(1.8rem,3vw,3rem)] font-semibold tracking-tight text-[color:var(--foreground)]">
+              {t("title")}
+            </h3>
+            <p className="page-copy max-w-2xl">{t("subtitle")}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/complaints" className="primary-action">
               {t("ctaReport")}
             </Link>
-            <Link
-              href="/complaints/history"
-              className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-750 dark:text-slate-300 dark:border-slate-700 font-bold text-center text-xs py-3 px-6 rounded-xl transition-all duration-150 cursor-pointer"
-            >
+            <Link href="/complaints/history" className="secondary-action">
               {t("ctaView")}
             </Link>
           </div>
-        </div>
-
-        {/* Right Side Workflow Flowchart */}
-        <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-5 rounded-xl text-center">
-          <span className="text-[10px] font-extrabold text-slate-450 dark:text-slate-500 uppercase tracking-widest block mb-4">
-            Audited Incident Resolution Flow
-          </span>
-          <div className="flex flex-col sm:flex-row justify-around items-center gap-3 text-[10px] text-slate-500 dark:text-slate-400 font-bold">
-            <div className="space-y-0.5">
-              <span className="text-lg block">👤</span>
-              <p>Citizen</p>
-            </div>
-            <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">➔</span>
-            <div className="space-y-0.5">
-              <span className="text-lg block">🤖</span>
-              <p className="text-emerald-600 dark:text-emerald-450">AI Verify</p>
-            </div>
-            <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">➔</span>
-            <div className="space-y-0.5">
-              <span className="text-lg block">🏛️</span>
-              <p>Municipal</p>
-            </div>
-            <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">➔</span>
-            <div className="space-y-0.5">
-              <span className="text-lg block">✅</span>
-              <p className="text-emerald-600 dark:text-emerald-450 font-extrabold">Resolved</p>
-            </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              ["Photo Evidence", "Upload visual proof with each complaint."],
+              ["Live Tracking", "Follow review, assignment, and resolution states."],
+              ["Local Hotspots", "Review active clusters around your area."],
+            ].map(([title, copy]) => (
+              <div key={title} className="metric-card min-h-[130px]">
+                <p className="metric-label">{title}</p>
+                <p className="mt-4 text-sm leading-6 text-[color:var(--foreground-soft)]">{copy}</p>
+              </div>
+            ))}
           </div>
         </div>
 
+        <div className="section-card flex flex-col justify-between gap-5">
+          <div className="space-y-3">
+            <p className="metric-label">Verified Workflow</p>
+            <h4 className="text-xl font-semibold tracking-tight text-[color:var(--foreground)]">
+              Citizen reporting with a clear review trail
+            </h4>
+            <p className="fine-print">
+              The current frontend focuses on the live citizen portal: complaint submission, tracking, hotspot review, and profile preferences.
+            </p>
+          </div>
+          <div className="space-y-3">
+            {[
+              ["01", "Report issue", "Add category, location, and attachments."],
+              ["02", "Review status", "Watch the complaint move through the lifecycle."],
+              ["03", "Inspect response", "Read municipal updates and outcome evidence."],
+            ].map(([step, title, copy]) => (
+              <div key={step} className="flex items-start gap-3 rounded-[20px] border border-[color:var(--line)] bg-[color:var(--surface-strong)] p-4">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[color:var(--accent-soft)] text-sm font-semibold text-[color:var(--accent-strong)]">
+                  {step}
+                </span>
+                <div>
+                  <p className="text-sm font-semibold text-[color:var(--foreground)]">{title}</p>
+                  <p className="fine-print mt-1">{copy}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

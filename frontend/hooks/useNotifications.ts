@@ -3,6 +3,7 @@ import { notificationService, NotificationsQueryResponse } from "../services/not
 
 export function useNotifications() {
   const [notifications, setNotifications] = useState<NotificationsQueryResponse | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +22,17 @@ export function useNotifications() {
     }
   }, []);
 
+  const fetchUnreadCount = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const data = await notificationService.getUnreadCount(signal);
+      setUnreadCount(data.count);
+    } catch (err: any) {
+      if (err.name !== "CanceledError" && err.name !== "AbortError") {
+        console.error("Failed to retrieve unread count:", err);
+      }
+    }
+  }, []);
+
   const markRead = useCallback(async (id: string) => {
     try {
       await notificationService.markNotificationRead(id);
@@ -34,6 +46,7 @@ export function useNotifications() {
           items: updatedItems
         });
       }
+      setUnreadCount((current) => Math.max(0, current - 1));
     } catch (err: any) {
       console.error("Failed to mark notification read:", err);
     }
@@ -49,6 +62,7 @@ export function useNotifications() {
           items: updatedItems
         });
       }
+      setUnreadCount(0);
     } catch (err: any) {
       console.error("Failed to mark all notifications read:", err);
     }
@@ -56,9 +70,11 @@ export function useNotifications() {
 
   return {
     notifications,
+    unreadCount,
     loading,
     error,
     fetchNotifications,
+    fetchUnreadCount,
     markRead,
     markAllRead
   };

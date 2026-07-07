@@ -32,5 +32,9 @@ export const notificationService = {
 
   markAllNotificationsRead(signal?: AbortSignal): Promise<{ count_marked: number }> {
     return api.put("/notifications/read-all", {}, { signal });
+  },
+
+  getUnreadCount(signal?: AbortSignal): Promise<{ count: number }> {
+    return api.get("/notifications/unread-count", { signal });
   }
 };

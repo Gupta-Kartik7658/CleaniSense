@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
 import Link from "next/link";
+import React, { useState } from "react";
 import { useAuth } from "@/providers/AuthProvider";
+
+const currentAccess = [
+  "Google sign-in",
+  "Citizen dashboard",
+  "Complaint submission and history",
+  "Hotspots, alerts, and preferences",
+];
 
 export default function LoginPage() {
   const { login, loading } = useAuth();
@@ -19,73 +26,69 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="w-full space-y-6 text-slate-900">
-      
-      {/* Back Navigation Button */}
-      <div className="text-left">
+    <div className="w-full space-y-8">
+      <div className="space-y-4">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 text-sm text-[color:var(--ink-soft)] transition hover:text-[color:var(--ink-strong)]"
         >
-          <span>←</span>
-          <span>Back to Home</span>
+          <span aria-hidden="true">{"<-"}</span>
+          Back to Home
         </Link>
-      </div>
 
-      {/* Logo/Icon */}
-      <div className="text-center space-y-4">
-        <div className="flex justify-center">
-          <div className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-md text-white font-extrabold text-xl">
-            CS
-          </div>
-        </div>
-        
-        <div className="space-y-1">
-          <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">
-            Sign in to CleaniSense
-          </h2>
-          <p className="text-xs text-slate-500 max-w-xs mx-auto leading-normal">
-            Every Street Deserves Clean Air. Help build cleaner and healthier communities.
+        <div className="space-y-3">
+          <p className="page-kicker">Sign In</p>
+          <h2 className="page-title text-3xl">Continue into the citizen workspace</h2>
+          <p className="page-copy">
+            Sign in with Google to open the active CleaniSense portal. This route connects to the backend
+            session flow already used across the dashboard and complaint APIs.
           </p>
         </div>
       </div>
 
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-650 font-medium text-center">
-          {error}
-        </div>
-      )}
-
-      {/* Action Button Container */}
-      <div className="space-y-3 pt-2">
-        <button
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          type="button"
-          className="group w-full flex items-center justify-center gap-3 py-3 px-4 border border-slate-200 text-xs font-bold rounded-xl text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-        >
-          {loading ? (
-            <svg className="animate-spin h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-          ) : (
-            <svg className="h-4.5 w-4.5" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">
-              <g transform="matrix(1, 0, 0, 1, 0, 0)">
-                <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.05,3.1v2.57h3.31c1.94,-1.78 3.06,-4.42 3.06,-7.47c0,-0.64 -0.06,-1.27 -0.17,-1.9Z" fill="#4285F4" />
-                <path d="M12,20.7c2.43,0 4.47,-0.8 5.96,-2.19l-3.31,-2.57c-0.92,0.62 -2.1,0.98 -3.53,0.98c-2.71,0 -5.01,-1.83 -5.83,-4.29H1.89v2.66c1.49,2.97 4.56,5.01 8.11,5.01Z" fill="#34A853" />
-                <path d="M6.17,12.63c-0.21,-0.62 -0.33,-1.28 -0.33,-1.96c0,-0.68 0.12,-1.34 0.33,-1.96V6.05H1.89C1.24,7.35 0.88,8.83 0.88,10.4c0,1.57 0.36,3.05 1.01,4.35l3.31,-2.66c-0.21,-0.62 -0.33,-1.28 -0.33,-1.96Z" fill="#FBBC05" />
-                <path d="M12,5.2c1.32,0 2.51,0.45 3.44,1.35l2.58,-2.58C16.46,2.44 14.42,1.6 12,1.6C8.45,1.6 5.38,3.64 3.89,6.61l4.29,3.31c0.82,-2.46 3.12,-4.29 5.83,-4.29Z" fill="#EA4335" />
-              </g>
-            </svg>
-          )}
-          <span>{loading ? "Connecting..." : "Continue with Google"}</span>
-        </button>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {currentAccess.map((item) => (
+          <div
+            key={item}
+            className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-4 py-4 text-sm text-[color:var(--ink)]"
+          >
+            {item}
+          </div>
+        ))}
       </div>
 
-      <div className="text-[10px] text-slate-400 text-center leading-relaxed">
-        This is a secure connection verified by Google Identity Services.<br />
-        By signing in, you help build environmental accountability.
+      {error ? <div className="note-danger">{error}</div> : null}
+
+      <div className="space-y-4">
+        <button
+          type="button"
+          onClick={handleGoogleLogin}
+          disabled={loading}
+          className="primary-action w-full justify-center"
+        >
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[color:var(--line)] bg-white text-xs font-semibold text-[color:var(--ink-strong)]">
+            G
+          </span>
+          {loading ? "Connecting..." : "Continue with Google"}
+        </button>
+
+        <p className="fine-print text-center">
+          CleaniSense currently supports Google-based access for the citizen portal.
+        </p>
+      </div>
+
+      <div className="soft-divider" />
+
+      <div className="flex flex-col gap-3 text-sm text-[color:var(--ink-soft)] sm:flex-row sm:items-center sm:justify-between">
+        <span>Need context before signing in?</span>
+        <div className="flex gap-3">
+          <Link href="/register" className="ghost-action">
+            Access Details
+          </Link>
+          <Link href="/hotspots" className="ghost-action">
+            View Hotspots
+          </Link>
+        </div>
       </div>
     </div>
   );

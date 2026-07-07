@@ -16,8 +16,11 @@ router = APIRouter(prefix="/image-analysis", tags=["image-analysis"])
     "/analyze",
     response_model=StandardResponseModel,
     status_code=status.HTTP_200_OK,
-    summary="Analyze Pollution Image",
-    description="Uploads an image and returns image-only pollution severity analysis.",
+    summary="Analyze Complaint Image",
+    description=(
+        "Uploads an image and returns image-only complaint-category analysis for air, "
+        "waste, sewerage, and water contamination signals."
+    ),
 )
 async def analyze_pollution_image(file: UploadFile = File(...)):
     """
@@ -40,9 +43,12 @@ async def analyze_pollution_image(file: UploadFile = File(...)):
     summary = PollutionImageSummaryResponse(
         pollution_detected=analysis["pollution_detected"],
         dominant_type=analysis["dominant_type"],
+        primary_category=analysis["primary_category"],
         severity_score=analysis["severity_score"],
         severity_label=analysis["severity_label"],
         supported_pollution_types=analysis["metadata"]["supported_pollution_types"],
+        supported_complaint_categories=analysis["metadata"]["supported_complaint_categories"],
+        excluded_complaint_categories=analysis["metadata"]["excluded_complaint_categories"],
         image_shape=list(analysis["metadata"]["image_shape"]),
     )
     detailed = PollutionImageAnalysisResponse.model_validate(analysis)

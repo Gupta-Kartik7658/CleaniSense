@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ComplaintsPageView } from "@/components/pages/ComplaintsPageView";
 import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { useComplaints } from "@/hooks/useComplaints";
 import { configService } from "@/services/config";
@@ -35,6 +36,26 @@ export default function ComplaintsPage() {
 
   // Load config on mount
   const [configError, setConfigError] = useState<string | null>(null);
+
+  const acceptedTypesLabel = useMemo(() => {
+    return allowedTypes
+      .map((type) => {
+        if (type === "image/jpeg") return "JPG";
+        if (type === "image/png") return "PNG";
+        if (type === "application/pdf") return "PDF";
+        return type;
+      })
+      .join(", ");
+  }, [allowedTypes]);
+
+  const submitDisabled =
+    submitting ||
+    categories.length === 0 ||
+    title.trim().length < 5 ||
+    description.trim().length < 20 ||
+    !locationName.trim() ||
+    !lat ||
+    !lng;
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -150,6 +171,42 @@ export default function ComplaintsPage() {
       console.error("Submission failed:", err);
     }
   };
+
+  return (
+    <ComplaintsPageView
+      categories={categories}
+      configLoading={configLoading}
+      configError={configError}
+      submitError={submitError}
+      maxUploadSizeMb={maxUploadSizeMb}
+      maxAttachments={maxAttachments}
+      allowedTypes={allowedTypes}
+      acceptedTypesLabel={acceptedTypesLabel}
+      coords={coords ? { latitude: coords.latitude, longitude: coords.longitude } : null}
+      loadingLocation={loadingLocation}
+      title={title}
+      description={description}
+      categoryId={categoryId}
+      locationName={locationName}
+      lat={lat}
+      lng={lng}
+      selectedFiles={selectedFiles}
+      fileErrors={fileErrors}
+      submitting={submitting}
+      showSuccessToast={showSuccessToast}
+      submitDisabled={submitDisabled}
+      setTitle={setTitle}
+      setDescription={setDescription}
+      setCategoryId={setCategoryId}
+      setLocationName={setLocationName}
+      setLat={setLat}
+      setLng={setLng}
+      handleFileChange={handleFileChange}
+      removeFile={removeFile}
+      handleSubmit={handleSubmit}
+      onCancel={() => router.push("/dashboard")}
+    />
+  );
 
   return (
     <PortalLayout>

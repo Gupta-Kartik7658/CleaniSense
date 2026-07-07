@@ -4,7 +4,7 @@ import argparse
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Union
+from typing import Any, Dict, List, Mapping, Optional, Union
 
 import cv2
 import numpy as np
@@ -37,12 +37,32 @@ class DetectorResult:
 
 
 @dataclass
+class ComplaintCategoryAssessment:
+    name: str
+    score: float
+    severity_label: str
+    detected: bool
+    supporting_detectors: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "score": round(float(self.score), 4),
+            "severity_label": self.severity_label,
+            "detected": bool(self.detected),
+            "supporting_detectors": list(self.supporting_detectors),
+        }
+
+
+@dataclass
 class PollutionAnalysisResult:
     pollution_detected: bool
     dominant_type: str
+    primary_category: str
     severity_score: float
     severity_label: str
     detectors: Dict[str, DetectorResult]
+    category_assessments: Dict[str, ComplaintCategoryAssessment]
     color_features: Dict[str, float]
     texture_features: Dict[str, float]
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -51,6 +71,7 @@ class PollutionAnalysisResult:
         return {
             "pollution_detected": self.pollution_detected,
             "dominant_type": self.dominant_type,
+            "primary_category": self.primary_category,
             "severity_score": round(float(self.severity_score), 2),
             "severity_label": self.severity_label,
             "color_features": {
@@ -63,13 +84,17 @@ class PollutionAnalysisResult:
                 name: detector.to_dict(include_mask=include_masks)
                 for name, detector in self.detectors.items()
             },
+            "category_assessments": {
+                name: assessment.to_dict()
+                for name, assessment in self.category_assessments.items()
+            },
             "metadata": self.metadata,
         }
 
 
 class PollutionImageService:
     """
-    Classical computer-vision baseline for pollution analysis.
+    Classical computer-vision baseline for complaint-image analysis.
 
     This service intentionally avoids ML/LLM inference and relies on:
     - color-space heuristics
@@ -79,6 +104,13 @@ class PollutionImageService:
     """
 
     MAX_DIMENSION = 1024
+    AIR_POLLUTION = "Air Pollution"
+    AIR_QUALITY_CONTROL = "Air Quality Control"
+    WASTE_MANAGEMENT = "Waste Management"
+    WASTEWATER_SEWERAGE = "Wastewater / Sewerage"
+    WATER_CONTAMINATION = "Water Contamination"
+    OTHER = "Other"
+    EXCLUDED_CATEGORIES = ["Noise Pollution"]
 
     def analyze(self, image_input: ImageInput) -> PollutionAnalysisResult:
         views = self._prepare_image_views(image_input)
@@ -88,16 +120,35 @@ class PollutionImageService:
         smoke = self.detect_smoke(views)
         dust_haze = self.detect_dust_haze(views)
         garbage = self.segment_garbage(views)
+        wastewater = self.detect_wastewater_sewerage(views)
+        water_contamination = self.detect_water_contamination(views)
 
         detectors = {
             smoke.name: smoke,
             dust_haze.name: dust_haze,
             garbage.name: garbage,
+            wastewater.name: wastewater,
+            water_contamination.name: water_contamination,
         }
 
         dominant_type = max(detectors.values(), key=lambda item: item.score).name
         severity_score = self.compute_image_severity(detectors, color_features, texture_features)
         severity_label = self._severity_label(severity_score)
+        category_assessments = self.assess_complaint_categories(
+            detectors,
+            color_features,
+            texture_features,
+        )
+        detected_categories = [
+            assessment
+            for assessment in category_assessments.values()
+            if assessment.detected
+        ]
+        primary_category = (
+            max(category_assessments.values(), key=lambda item: item.score).name
+            if detected_categories
+            else self.OTHER
+        )
         positive_detectors = sum(1 for detector in detectors.values() if detector.detected)
         pollution_detected = positive_detectors > 0 and (
             severity_score >= 30.0 or detectors[dominant_type].score >= 0.35
@@ -106,9 +157,11 @@ class PollutionImageService:
         return PollutionAnalysisResult(
             pollution_detected=pollution_detected,
             dominant_type=dominant_type if pollution_detected else "low_signal",
+            primary_category=primary_category,
             severity_score=severity_score,
             severity_label=severity_label,
             detectors=detectors,
+            category_assessments=category_assessments,
             color_features=color_features,
             texture_features=texture_features,
             metadata={
@@ -117,10 +170,21 @@ class PollutionImageService:
                     "smoke",
                     "dust_haze",
                     "garbage_accumulation",
+                    "wastewater_sewerage",
+                    "water_contamination",
                 ],
+                "supported_complaint_categories": [
+                    self.WASTE_MANAGEMENT,
+                    self.AIR_POLLUTION,
+                    self.AIR_QUALITY_CONTROL,
+                    self.WASTEWATER_SEWERAGE,
+                    self.WATER_CONTAMINATION,
+                ],
+                "excluded_complaint_categories": list(self.EXCLUDED_CATEGORIES),
                 "note": (
-                    "Severity is image-only for now and should later be fused with "
-                    "survey, weather, and complaint-density signals from the SRS."
+                    "Severity is image-only for now and supports air, waste, sewerage, "
+                    "and water categories. Noise complaints remain excluded because "
+                    "they are not visually diagnosable from a still image."
                 ),
             },
         )
@@ -165,6 +229,14 @@ class PollutionImageService:
             "mean_value": float(np.mean(val) / 255.0),
             "neutral_ratio": float(np.mean(neutral_mask)),
             "brown_ratio": float(np.mean(brown_mask)),
+            "green_ratio": float(
+                np.mean((hue >= 35) & (hue <= 95) & (sat >= 35) & (val >= 30))
+            ),
+            "blue_ratio": float(
+                np.mean((hue >= 90) & (hue <= 135) & (sat >= 20) & (val >= 40))
+            ),
+            "dark_ratio": float(np.mean(val <= 70)),
+            "bright_ratio": float(np.mean(val >= 205)),
             "warm_ratio": float(np.mean(warm_mask)),
             "channel_std": float(np.std(bgr.astype(np.float32)) / 128.0),
         }
@@ -424,6 +496,268 @@ class PollutionImageService:
             mask=full_mask,
         )
 
+    def detect_wastewater_sewerage(
+        self,
+        image_input: Union[ImageInput, Mapping[str, np.ndarray]],
+    ) -> DetectorResult:
+        views = (
+            image_input
+            if isinstance(image_input, Mapping)
+            else self._prepare_image_views(image_input)
+        )
+        bgr = views["bgr"]
+        lab = views["lab"]
+        hsv = views["hsv"]
+        gray = views["gray"]
+
+        hue = hsv[:, :, 0]
+        sat = hsv[:, :, 1]
+        val = hsv[:, :, 2]
+        blue, green, red = cv2.split(bgr)
+        lower_mask = self._lower_region_mask(gray.shape, start_fraction=0.55)
+        lower_pixels = lower_mask > 0
+        lower_median_val = float(np.median(val[lower_pixels]))
+        lower_median_lab = np.median(
+            lab[lower_pixels].reshape(-1, 3).astype(np.float32),
+            axis=0,
+        )
+        lab_distance = np.linalg.norm(
+            lab.astype(np.float32) - lower_median_lab,
+            axis=2,
+        )
+
+        laplacian = cv2.Laplacian(gray, cv2.CV_32F, ksize=3)
+        local_contrast = self._normalize_map(np.abs(laplacian))
+        low_contrast_mask = local_contrast <= 0.18
+
+        sewer_tint = (
+            (((hue >= 18) & (hue <= 48)) | ((hue >= 50) & (hue <= 95)))
+            & (sat >= 24)
+            & (sat <= 170)
+            & (val >= 20)
+            & (val <= 160)
+            & (green.astype(np.int16) <= red.astype(np.int16) + 10)
+        )
+        darker_than_context = val <= max(int(lower_median_val - 15.0), 55)
+        dark_pool = darker_than_context & (sat >= 15) & (sat <= 150)
+        reflective_patch = (sat <= 42) & (val >= min(int(lower_median_val + 22.0), 210))
+        water_candidate = (
+            lower_mask
+            & low_contrast_mask
+            & dark_pool
+            & (sewer_tint | (lab_distance >= 12.0))
+        )
+        mask = self._clean_mask(water_candidate, kernel_size=9)
+        mask = self._keep_large_regions(
+            mask,
+            min_area=max(220, int(gray.shape[0] * gray.shape[1] * 0.003)),
+        )
+
+        coverage_ratio = self._mask_ratio(mask)
+        lower_bias = self._lower_region_bias(mask, start_fraction=0.55)
+        dark_pool_support = (
+            float(
+                np.mean(
+                    np.clip(
+                        (lower_median_val - val[mask > 0].astype(np.float32)) / 48.0,
+                        0.0,
+                        1.0,
+                    )
+                )
+            )
+            if np.any(mask)
+            else 0.0
+        )
+        sewer_tint_support = (
+            float(np.mean(sewer_tint[mask > 0])) if np.any(mask) else 0.0
+        )
+        reflective_support = (
+            float(np.mean(reflective_patch[self._dilate_mask(mask, 15) > 0]))
+            if np.any(mask)
+            else 0.0
+        )
+        context_distance_support = (
+            float(np.mean(np.clip(lab_distance[mask > 0] / 28.0, 0.0, 1.0)))
+            if np.any(mask)
+            else 0.0
+        )
+        edge_density = (
+            float(np.mean(cv2.Canny(gray, 50, 140)[mask > 0] > 0))
+            if np.any(mask)
+            else 0.0
+        )
+        smooth_support = 1.0 - min(edge_density / 0.08, 1.0)
+        irregularity = self._contour_irregularity(mask)
+        coverage_support = min(coverage_ratio / 0.14, 1.0)
+        spread_penalty = self._clip01((coverage_ratio - 0.24) / 0.14)
+
+        score = self._clip01(
+            0.28 * coverage_support
+            + 0.25 * dark_pool_support
+            + 0.18 * sewer_tint_support
+            + 0.10 * context_distance_support
+            + 0.08 * smooth_support
+            + 0.06 * lower_bias
+            + 0.05 * reflective_support
+            + 0.05 * irregularity
+            - 0.15 * spread_penalty
+        )
+        detected = bool(
+            score >= 0.34
+            and coverage_ratio >= 0.012
+            and dark_pool_support >= 0.15
+            and context_distance_support >= 0.18
+        )
+
+        return DetectorResult(
+            name="wastewater_sewerage",
+            score=score,
+            coverage_ratio=coverage_ratio,
+            detected=detected,
+            features={
+                "lower_bias": lower_bias,
+                "dark_pool_support": dark_pool_support,
+                "sewer_tint_support": sewer_tint_support,
+                "reflective_support": reflective_support,
+                "context_distance_support": context_distance_support,
+                "smooth_support": smooth_support,
+                "irregularity": irregularity,
+                "coverage_support": coverage_support,
+                "spread_penalty": spread_penalty,
+            },
+            mask=mask,
+        )
+
+    def detect_water_contamination(
+        self,
+        image_input: Union[ImageInput, Mapping[str, np.ndarray]],
+    ) -> DetectorResult:
+        views = (
+            image_input
+            if isinstance(image_input, Mapping)
+            else self._prepare_image_views(image_input)
+        )
+        bgr = views["bgr"]
+        lab = views["lab"]
+        hsv = views["hsv"]
+        gray = views["gray"]
+
+        hue = hsv[:, :, 0]
+        sat = hsv[:, :, 1]
+        val = hsv[:, :, 2]
+        blue, green, red = cv2.split(bgr)
+        lower_mask = self._lower_region_mask(gray.shape, start_fraction=0.50)
+        lower_pixels = lower_mask > 0
+        lower_median_lab = np.median(
+            lab[lower_pixels].reshape(-1, 3).astype(np.float32),
+            axis=0,
+        )
+        lab_distance = np.linalg.norm(
+            lab.astype(np.float32) - lower_median_lab,
+            axis=2,
+        )
+
+        laplacian = cv2.Laplacian(gray, cv2.CV_32F, ksize=3)
+        local_contrast = self._normalize_map(np.abs(laplacian))
+        low_contrast_mask = local_contrast <= 0.22
+
+        water_like = (
+            lower_mask
+            & low_contrast_mask
+            & (hue >= 35)
+            & (hue <= 120)
+            & (sat >= 28)
+            & (sat <= 180)
+            & (val >= 35)
+            & (val <= 210)
+            & (lab_distance >= 14.0)
+            & (green.astype(np.int16) >= red.astype(np.int16) + 5)
+            & (green.astype(np.int16) >= blue.astype(np.int16) - 12)
+        )
+        water_mask = self._clean_mask(water_like, kernel_size=9)
+        water_mask = self._keep_large_regions(
+            water_mask,
+            min_area=max(220, int(gray.shape[0] * gray.shape[1] * 0.003)),
+        )
+
+        contamination_tint = (
+            (((hue >= 30) & (hue <= 95)) | ((hue >= 100) & (hue <= 130)))
+            & (sat >= 35)
+            & (val >= 35)
+            & (val <= 195)
+        )
+        foam_mask = (sat <= 38) & (val >= 185)
+        contamination_mask = water_mask & (
+            contamination_tint | self._dilate_mask(foam_mask.astype(np.uint8), 9).astype(bool)
+        )
+        contamination_mask = self._clean_mask(contamination_mask.astype(np.uint8), kernel_size=7)
+
+        coverage_ratio = self._mask_ratio(contamination_mask)
+        water_coverage_ratio = self._mask_ratio(water_mask)
+        contamination_support = (
+            float(np.mean(contamination_tint[water_mask > 0])) if np.any(water_mask) else 0.0
+        )
+        color_shift_support = (
+            float(np.mean(np.clip(lab_distance[water_mask > 0] / 32.0, 0.0, 1.0)))
+            if np.any(water_mask)
+            else 0.0
+        )
+        foam_support = (
+            float(np.mean(foam_mask[self._dilate_mask(water_mask, 11) > 0]))
+            if np.any(water_mask)
+            else 0.0
+        )
+        turbidity_support = (
+            float(np.mean(1.0 - local_contrast[water_mask > 0])) if np.any(water_mask) else 0.0
+        )
+        edge_density = (
+            float(np.mean(cv2.Canny(gray, 50, 140)[water_mask > 0] > 0))
+            if np.any(water_mask)
+            else 0.0
+        )
+        smooth_support = 1.0 - min(edge_density / 0.08, 1.0)
+        lower_bias = self._lower_region_bias(contamination_mask, start_fraction=0.50)
+        coverage_support = min(coverage_ratio / 0.14, 1.0)
+        water_presence_support = min(water_coverage_ratio / 0.16, 1.0)
+        spread_penalty = self._clip01((water_coverage_ratio - 0.24) / 0.14)
+
+        score = self._clip01(
+            0.08 * water_presence_support
+            + 0.28 * coverage_support
+            + 0.24 * contamination_support
+            + 0.18 * color_shift_support
+            + 0.10 * foam_support
+            + 0.07 * smooth_support
+            + 0.05 * lower_bias
+            - 0.10 * spread_penalty
+        )
+        detected = bool(
+            score >= 0.34
+            and water_coverage_ratio >= 0.015
+            and color_shift_support >= 0.18
+            and contamination_support >= 0.22
+        )
+
+        return DetectorResult(
+            name="water_contamination",
+            score=score,
+            coverage_ratio=coverage_ratio,
+            detected=detected,
+            features={
+                "water_coverage_ratio": water_coverage_ratio,
+                "contamination_support": contamination_support,
+                "color_shift_support": color_shift_support,
+                "foam_support": foam_support,
+                "turbidity_support": turbidity_support,
+                "smooth_support": smooth_support,
+                "lower_bias": lower_bias,
+                "water_presence_support": water_presence_support,
+                "coverage_support": coverage_support,
+                "spread_penalty": spread_penalty,
+            },
+            mask=contamination_mask,
+        )
+
     def compute_image_severity(
         self,
         detectors: Mapping[str, DetectorResult],
@@ -433,19 +767,33 @@ class PollutionImageService:
         smoke_score = detectors["smoke"].score
         dust_score = detectors["dust_haze"].score
         garbage_score = detectors["garbage_accumulation"].score
+        wastewater_score = detectors["wastewater_sewerage"].score
+        water_contamination_score = detectors["water_contamination"].score
 
         weighted_signal = (
-            0.40 * smoke_score
-            + 0.30 * dust_score
-            + 0.30 * garbage_score
+            0.24 * smoke_score
+            + 0.20 * dust_score
+            + 0.20 * garbage_score
+            + 0.18 * wastewater_score
+            + 0.18 * water_contamination_score
         )
-        dominant_signal = max(smoke_score, dust_score, garbage_score)
+        dominant_signal = max(
+            smoke_score,
+            dust_score,
+            garbage_score,
+            wastewater_score,
+            water_contamination_score,
+        )
         texture_bonus = self._clip01(
             min(texture_features["glcm_contrast"] / 12.0, 1.0) * 0.6
             + min(texture_features["lbp_entropy"] / 3.5, 1.0) * 0.4
         )
         visual_pollution_bonus = self._clip01(
-            0.5 * color_features["brown_ratio"] + 0.5 * color_features["warm_ratio"]
+            0.25 * color_features["brown_ratio"]
+            + 0.20 * color_features["warm_ratio"]
+            + 0.20 * color_features["green_ratio"]
+            + 0.20 * color_features["blue_ratio"]
+            + 0.15 * color_features["dark_ratio"]
         )
 
         raw_score = (
@@ -455,6 +803,85 @@ class PollutionImageService:
             + 0.05 * visual_pollution_bonus
         )
         return round(self._clip01(raw_score) * 100.0, 2)
+
+    def assess_complaint_categories(
+        self,
+        detectors: Mapping[str, DetectorResult],
+        color_features: Mapping[str, float],
+        texture_features: Mapping[str, float],
+    ) -> Dict[str, ComplaintCategoryAssessment]:
+        dominant_detector = max(detectors.values(), key=lambda item: item.score).name
+        smoke_score = detectors["smoke"].score
+        dust_score = detectors["dust_haze"].score
+        garbage_score = detectors["garbage_accumulation"].score
+        wastewater_score = detectors["wastewater_sewerage"].score
+        water_contamination_score = detectors["water_contamination"].score
+
+        def dominant_bonus(detector_name: str) -> float:
+            detector = detectors[detector_name]
+            if detector.detected and dominant_detector == detector_name:
+                return 0.08
+            return 0.0
+
+        air_pollution_score = self._clip01(
+            0.68 * smoke_score
+            + 0.24 * dust_score
+            + 0.08 * color_features["warm_ratio"]
+            + dominant_bonus("smoke")
+        )
+        air_quality_score = self._clip01(
+            0.62 * dust_score
+            + 0.20 * smoke_score
+            + 0.10 * (1.0 - min(texture_features["glcm_energy"], 1.0))
+            + 0.08 * color_features["neutral_ratio"]
+            + dominant_bonus("dust_haze")
+        )
+        waste_management_score = self._clip01(
+            0.85 * garbage_score
+            + 0.15 * color_features["brown_ratio"]
+            + dominant_bonus("garbage_accumulation")
+        )
+        wastewater_category_score = self._clip01(
+            0.76 * wastewater_score
+            + 0.14 * water_contamination_score
+            + 0.10 * color_features["dark_ratio"]
+            + dominant_bonus("wastewater_sewerage")
+        )
+        water_contamination_category_score = self._clip01(
+            0.74 * water_contamination_score
+            + 0.14 * wastewater_score
+            + 0.06 * color_features["green_ratio"]
+            + 0.06 * color_features["blue_ratio"]
+            + dominant_bonus("water_contamination")
+        )
+
+        return {
+            self.WASTE_MANAGEMENT: self._build_category_assessment(
+                self.WASTE_MANAGEMENT,
+                waste_management_score,
+                supporting_detectors=["garbage_accumulation"],
+            ),
+            self.AIR_POLLUTION: self._build_category_assessment(
+                self.AIR_POLLUTION,
+                air_pollution_score,
+                supporting_detectors=["smoke", "dust_haze"],
+            ),
+            self.AIR_QUALITY_CONTROL: self._build_category_assessment(
+                self.AIR_QUALITY_CONTROL,
+                air_quality_score,
+                supporting_detectors=["dust_haze", "smoke"],
+            ),
+            self.WASTEWATER_SEWERAGE: self._build_category_assessment(
+                self.WASTEWATER_SEWERAGE,
+                wastewater_category_score,
+                supporting_detectors=["wastewater_sewerage", "water_contamination"],
+            ),
+            self.WATER_CONTAMINATION: self._build_category_assessment(
+                self.WATER_CONTAMINATION,
+                water_contamination_category_score,
+                supporting_detectors=["water_contamination", "wastewater_sewerage"],
+            ),
+        }
 
     def _prepare_image_views(self, image_input: ImageInput) -> Dict[str, np.ndarray]:
         bgr = self._load_image(image_input)
@@ -517,6 +944,21 @@ class PollutionImageService:
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (patch_size, patch_size))
         return cv2.erode(min_channel, kernel)
 
+    def _build_category_assessment(
+        self,
+        category_name: str,
+        score: float,
+        supporting_detectors: List[str],
+    ) -> ComplaintCategoryAssessment:
+        severity_score = round(float(score) * 100.0, 2)
+        return ComplaintCategoryAssessment(
+            name=category_name,
+            score=score,
+            severity_label=self._severity_label(severity_score),
+            detected=bool(score >= 0.32),
+            supporting_detectors=supporting_detectors,
+        )
+
     def _clean_mask(self, mask: np.ndarray, kernel_size: int) -> np.ndarray:
         uint_mask = (mask > 0).astype(np.uint8)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
@@ -572,6 +1014,21 @@ class PollutionImageService:
         top_rows = max(1, int(mask.shape[0] * top_fraction))
         top_pixels = np.sum(mask[:top_rows, :] > 0)
         return float(top_pixels / total_pixels)
+
+    def _lower_region_mask(self, image_shape: tuple[int, int], start_fraction: float) -> np.ndarray:
+        height, width = image_shape
+        start_row = max(0, int(height * start_fraction))
+        mask = np.zeros((height, width), dtype=bool)
+        mask[start_row:, :] = True
+        return mask
+
+    def _lower_region_bias(self, mask: np.ndarray, start_fraction: float) -> float:
+        total_pixels = np.sum(mask > 0)
+        if total_pixels == 0:
+            return 0.0
+        start_row = max(0, int(mask.shape[0] * start_fraction))
+        lower_pixels = np.sum(mask[start_row:, :] > 0)
+        return float(lower_pixels / total_pixels)
 
     def _normalize_map(self, map_array: np.ndarray) -> np.ndarray:
         map_array = map_array.astype(np.float32)

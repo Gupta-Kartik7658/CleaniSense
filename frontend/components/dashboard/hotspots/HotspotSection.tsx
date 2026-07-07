@@ -21,7 +21,7 @@ export function HotspotSection({
   };
 
   return (
-    <div className="space-y-4 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm text-left">
+    <div className="section-card space-y-4 text-left">
       <SectionHeader title="Nearby Hotspots" onAction={handleNavigate} />
       <HotspotMap hotspots={hotspots} loading={loading} />
       <HotspotList hotspots={hotspots} loading={loading} />

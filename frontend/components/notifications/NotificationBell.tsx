@@ -4,13 +4,26 @@ import React, { useState, useEffect, useRef } from "react";
 import { Notification } from "./NotificationItem";
 import { NotificationDropdown } from "./NotificationDropdown";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useDashboard } from "@/hooks/useDashboard";
 
 export function NotificationBell() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const { data: dashboardData } = useDashboard();
-  const { notifications, fetchNotifications, markRead, markAllRead } = useNotifications();
+  const {
+    notifications,
+    unreadCount,
+    fetchNotifications,
+    fetchUnreadCount,
+    markRead,
+    markAllRead,
+  } = useNotifications();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchUnreadCount(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [fetchUnreadCount]);
 
   // Fetch notifications only when user clicks to open dropdown
   useEffect(() => {
@@ -64,23 +77,18 @@ export function NotificationBell() {
       }))
     : [];
 
-  // Centralized badge unread count: prioritize dashboard summary, fallback to local list count
-  const unreadCount = dashboardData?.unreadNotifications !== undefined
-    ? dashboardData.unreadNotifications
-    : uiNotifications.filter((n) => !n.isRead).length;
-
   return (
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setDropdownOpen(!dropdownOpen)}
-        className="relative cursor-pointer hover:opacity-80 transition-opacity focus:outline-none p-1 rounded-lg"
+        className="icon-action relative"
         aria-haspopup="true"
         aria-expanded={dropdownOpen}
         aria-label="Alert notifications feed"
       >
-        <span className="text-xl">🔔</span>
+        <span className="text-sm font-semibold">Alerts</span>
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 bg-rose-500 text-white rounded-full flex items-center justify-center text-[8px] font-extrabold leading-none border border-white dark:border-slate-900">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[color:var(--danger)] px-1 text-[0.62rem] font-semibold leading-none text-white">
             {unreadCount}
           </span>
         )}

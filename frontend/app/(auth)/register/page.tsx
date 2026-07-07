@@ -1,58 +1,63 @@
-import React from 'react'
-import Link from 'next/link'
+import Link from "next/link";
+import React from "react";
+
+const notes = [
+  "Sign-in is currently handled through Google authentication.",
+  "Citizen flows available today include dashboard, complaints, hotspots, notifications, and preferences.",
+  "Unfinished SRS modules are intentionally not exposed in the frontend yet.",
+];
 
 export default function RegisterPage() {
   return (
-    <div className="text-center">
-      <h2 className="mt-6 text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-        Create your account
-      </h2>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-        Join the CleaniSense pollution monitoring effort
-      </p>
-      <div className="mt-8 space-y-6">
-        <div className="rounded-md shadow-sm -space-y-px">
-          <div>
-            <input
-              type="text"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white rounded-t-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-transparent"
-              placeholder="Full name"
-            />
-          </div>
-          <div>
-            <input
-              type="email"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-transparent"
-              placeholder="Email address"
-            />
-          </div>
-          <div>
-            <input
-              type="password"
-              required
-              className="appearance-none rounded-none relative block w-full px-3 py-2 border border-slate-300 dark:border-slate-700 placeholder-slate-500 text-slate-900 dark:text-white rounded-b-md focus:outline-none focus:ring-emerald-500 focus:border-emerald-500 focus:z-10 sm:text-sm bg-transparent"
-              placeholder="Password"
-            />
-          </div>
-        </div>
+    <div className="space-y-8">
+      <div className="space-y-4">
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-2 text-sm text-[color:var(--ink-soft)] transition hover:text-[color:var(--ink-strong)]"
+        >
+          <span aria-hidden="true">{"<-"}</span>
+          Back to Sign In
+        </Link>
 
-        <div>
-          <button
-            type="submit"
-            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors"
-          >
-            Register
-          </button>
+        <div className="space-y-3">
+          <p className="page-kicker">Access Notes</p>
+          <h2 className="page-title text-3xl">There is no separate account registration flow yet.</h2>
+          <p className="page-copy">
+            To keep the product aligned with the implemented backend, account access currently starts with
+            Google sign-in instead of a custom email and password registration form.
+          </p>
         </div>
       </div>
-      <p className="mt-6 text-sm text-slate-600 dark:text-slate-400">
-        Already have an account?{' '}
-        <Link href="/login" className="font-medium text-emerald-600 hover:text-emerald-500 transition-colors">
-          Sign in here
-        </Link>
-      </p>
+
+      <div className="space-y-3">
+        {notes.map((note, index) => (
+          <div
+            key={note}
+            className="flex items-start gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-4 py-4"
+          >
+            <span className="pill-badge">0{index + 1}</span>
+            <p className="text-sm leading-6 text-[color:var(--ink-soft)]">{note}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="hero-card">
+        <div className="space-y-3">
+          <p className="metric-label">Next Step</p>
+          <h3 className="text-2xl font-semibold text-[color:var(--ink-strong)]">Use the supported entry path</h3>
+          <p className="text-sm leading-6 text-[color:var(--ink-soft)]">
+            Continue to the Google sign-in page to access the live citizen portal and the complaint workflows.
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link href="/login" className="primary-action">
+            Go to Sign In
+          </Link>
+          <Link href="/" className="secondary-action">
+            Return Home
+          </Link>
+        </div>
+      </div>
     </div>
-  )
+  );
 }

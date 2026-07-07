@@ -64,37 +64,37 @@ export function NotificationItem({
   return (
     <div
       onClick={handleNotificationClick}
-      className={`p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-all duration-150 relative ${
-        !notification.isRead ? "bg-slate-50/60 dark:bg-slate-900/40" : ""
+      className={`relative flex cursor-pointer items-start gap-3 border-b border-[color:var(--line)] p-3.5 transition-all duration-150 hover:bg-[color:var(--surface-muted)] ${
+        !notification.isRead ? "bg-[color:var(--surface-muted)]" : ""
       }`}
     >
-      <span className="text-lg leading-none pt-0.5">
+      <span className="pt-0.5 text-base font-semibold leading-none text-[color:var(--accent)]">
         {getStatusIcon(notification.type)}
       </span>
-      <div className="space-y-1 min-w-0 flex-1 text-left">
-        <div className="flex justify-between items-start gap-2">
+      <div className="min-w-0 flex-1 space-y-1 text-left">
+        <div className="flex items-start justify-between gap-2">
           <p
-            className={`text-xs leading-normal truncate ${
+            className={`truncate text-sm leading-normal ${
               !notification.isRead
-                ? "font-bold text-slate-900 dark:text-white"
-                : "text-slate-700 dark:text-slate-300"
+                ? "font-semibold text-[color:var(--foreground)]"
+                : "text-[color:var(--foreground)]"
             }`}
           >
             {notification.title}
           </p>
           {!notification.isRead && (
-            <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 mt-1" />
+            <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[color:var(--accent)]" />
           )}
         </div>
-        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed break-words">
+        <p className="text-xs leading-relaxed text-[color:var(--foreground-soft)] break-words">
           {notification.message}
         </p>
         {notification.reason && (
-          <p className="text-[9px] text-rose-700 bg-rose-50 dark:bg-rose-950/20 dark:text-rose-450 p-1.5 rounded mt-1 border border-rose-100 dark:border-rose-900 leading-normal">
+          <p className="mt-1 rounded-[14px] border border-transparent bg-[color:var(--danger-soft)] p-2 text-[0.7rem] leading-normal text-[color:var(--danger)]">
             Reason: {notification.reason}
           </p>
         )}
-        <p className="text-[9px] text-slate-400 dark:text-slate-550 pt-0.5">
+        <p className="pt-0.5 text-[0.7rem] text-[color:var(--foreground-soft)]">
           {new Date(notification.timestamp).toLocaleString("en-IN", {
             day: "numeric",
             month: "short",

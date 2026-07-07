@@ -31,7 +31,10 @@ export function useDashboard() {
         latitude: r.latitude,
         longitude: r.longitude,
         date: r.created_at ? r.created_at.split("T")[0] : "",
-        category: r.category ? r.category.name : "Other"
+        category: r.category ? r.category.name : "Other",
+        severity: r.severity
+          ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1)
+          : "Moderate",
       }));
 
       // Map hotspot item
@@ -49,10 +52,10 @@ export function useDashboard() {
       // Build compatible DashboardData object
       const formattedData: DashboardData = {
         summary: [
-          { label: "Total Reports", value: backendData.overview.total_reports, change: "All time logs", statusType: "neutral" },
-          { label: "Active Reports", value: backendData.overview.active_reports, change: "Under review", statusType: "warning" },
-          { label: "Resolved Reports", value: backendData.overview.resolved_reports, change: "Successfully resolved", statusType: "success" },
-          { label: "Nearby Hotspots", value: backendData.overview.nearby_hotspots, change: "Action required", statusType: "danger" }
+          { label: "Total Reports", value: backendData.overview.total_reports, change: "Citizen submissions", statusType: "neutral" },
+          { label: "Active Reports", value: backendData.overview.active_reports, change: "Awaiting action", statusType: "warning" },
+          { label: "Resolved Reports", value: backendData.overview.resolved_reports, change: "Closed with updates", statusType: "success" },
+          { label: "Nearby Hotspots", value: backendData.overview.nearby_hotspots, change: "Local watchlist", statusType: "danger" }
         ],
         reports: mappedReports,
         hotspots: mappedHotspots,

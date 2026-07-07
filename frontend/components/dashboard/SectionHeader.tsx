@@ -8,20 +8,21 @@ interface SectionHeaderProps {
 
 export function SectionHeader({
   title,
-  actionLabel = "View All →",
+  actionLabel = "View All",
   onAction,
 }: SectionHeaderProps) {
   return (
-    <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3 mb-5">
-      <h3 className="text-sm font-extrabold text-slate-800 dark:text-white tracking-tight uppercase">
-        {title}
-      </h3>
+    <div className="mb-5 flex items-center justify-between gap-3 border-b border-[color:var(--line)] pb-3">
+      <div className="space-y-1">
+        <p className="metric-label">Live Section</p>
+        <h3 className="text-lg font-semibold tracking-tight text-[color:var(--foreground)]">
+          {title}
+        </h3>
+      </div>
       {onAction && (
-        <button
-          onClick={onAction}
-          className="text-xs font-bold text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-500 transition-colors cursor-pointer"
-        >
+        <button onClick={onAction} className="ghost-action text-sm">
           {actionLabel}
+          <span aria-hidden="true">→</span>
         </button>
       )}
     </div>

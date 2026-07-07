@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { ComplaintHistoryRow, ComplaintsHistoryPageView } from "@/components/pages/ComplaintsHistoryPageView";
 import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
-import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
+import Link from "next/link";
 
 export default function ComplaintsHistoryPage() {
   const [search, setSearch] = useState("");
@@ -44,7 +45,7 @@ export default function ComplaintsHistoryPage() {
     return "Under Review";
   };
 
-  const filteredReports = complaintsData && complaintsData.items
+  const filteredReports: ComplaintHistoryRow[] = complaintsData && complaintsData.items
     ? complaintsData.items.map((r) => ({
         id: r.id,
         title: r.title,
@@ -57,6 +58,19 @@ export default function ComplaintsHistoryPage() {
         severity: r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : "Medium"
       }))
     : [];
+
+  return (
+    <ComplaintsHistoryPageView
+      search={search}
+      setSearch={setSearch}
+      filter={filter}
+      setFilter={setFilter}
+      loading={loading}
+      error={error}
+      total={complaintsData?.total || 0}
+      filteredReports={filteredReports}
+    />
+  );
 
   return (
     <PortalLayout>

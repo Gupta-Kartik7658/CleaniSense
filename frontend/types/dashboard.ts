@@ -89,6 +89,7 @@ export interface ReportItem {
   longitude: number;
   date: string;
   category?: string;
+  severity?: string;
 }
 
 export interface HotspotItem {

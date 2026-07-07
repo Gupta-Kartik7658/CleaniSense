@@ -32,10 +32,7 @@ export function ReportsSection({
       {loading ? (
         <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-4 rounded-xl shadow-sm space-y-3"
-            >
+            <div key={idx} className="section-card space-y-3">
               <div className="flex justify-between items-center">
                 <Skeleton className="h-4 w-40" />
                 <Skeleton className="h-5 w-16 rounded-full" />

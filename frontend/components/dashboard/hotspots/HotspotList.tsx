@@ -12,10 +12,7 @@ export function HotspotList({ hotspots, loading = false }: HotspotListProps) {
     return (
       <div className="space-y-3 pt-3">
         {Array.from({ length: 3 }).map((_, idx) => (
-          <div
-            key={idx}
-            className="flex justify-between items-center p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl"
-          >
+          <div key={idx} className="flex items-center justify-between rounded-[20px] border border-[color:var(--line)] bg-[color:var(--surface-strong)] p-3">
             <div className="space-y-2">
               <Skeleton className="h-4 w-32" />
               <Skeleton className="h-3 w-16" />
@@ -29,16 +26,16 @@ export function HotspotList({ hotspots, loading = false }: HotspotListProps) {
 
   if (!hotspots || hotspots.length === 0) {
     return (
-      <div className="text-center py-6 text-xs text-slate-450 dark:text-slate-500">
+      <div className="py-6 text-center text-sm text-[color:var(--foreground-soft)]">
         No hotspots identified in your immediate vicinity.
       </div>
     );
   }
 
   const priorityColors: Record<string, string> = {
-    High: "bg-rose-50 border-rose-100 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-400",
-    Medium: "bg-amber-50 border-amber-100 text-amber-805 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400",
-    Low: "bg-slate-50 border-slate-100 text-slate-500 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400",
+    High: "pill-badge tone-danger",
+    Medium: "pill-badge tone-warn",
+    Low: "pill-badge",
   };
 
   return (
@@ -46,24 +43,16 @@ export function HotspotList({ hotspots, loading = false }: HotspotListProps) {
       {hotspots.map((item) => (
         <div
           key={item.id}
-          className="flex justify-between items-center p-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-left transition-colors duration-150"
+          className="flex items-center justify-between rounded-[20px] border border-[color:var(--line)] bg-[color:var(--surface-strong)] p-3.5 text-left"
         >
           <div className="space-y-1">
-            <h4 className="text-xs font-bold text-slate-800 dark:text-white">{item.title}</h4>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1">
-              <span>📏</span>
-              <span>
-                Distance: {item.distance} • ({item.reportsCount} reports)
-              </span>
+            <h4 className="text-sm font-semibold text-[color:var(--foreground)]">{item.title}</h4>
+            <p className="fine-print">
+              Distance: {item.distance} • {item.reportsCount} linked reports
             </p>
+            {item.description && <p className="fine-print max-w-[26ch]">{item.description}</p>}
           </div>
-          <span
-            className={`text-[9px] font-bold px-2 py-0.5 rounded border ${
-              priorityColors[item.priority] || priorityColors.Low
-            }`}
-          >
-            {item.priority} Priority
-          </span>
+          <span className={priorityColors[item.priority] || priorityColors.Low}>{item.priority}</span>
         </div>
       ))}
     </div>

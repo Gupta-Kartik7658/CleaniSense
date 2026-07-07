@@ -21,7 +21,10 @@ except Exception as exc:
 
 # Seed master data (categories, municipalities) if missing
 from app.database.seed import seed_db
-seed_db()
+try:
+    seed_db()
+except Exception as exc:
+    logger.warning(f"Database seed skipped due to startup error: {exc}")
 
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException

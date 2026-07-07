@@ -12,7 +12,7 @@ export function OverviewSection({
   loading = false,
 }: OverviewSectionProps) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {loading || !summary
         ? Array.from({ length: 4 }).map((_, idx) => (
             <StatCard key={idx} label="" value="" loading={true} />

@@ -38,7 +38,10 @@ class TestPollutionImageAPI(unittest.TestCase):
         payload = response.json()
         self.assertTrue(payload["success"])
         self.assertEqual(payload["data"]["summary"]["dominant_type"], "smoke")
+        self.assertEqual(payload["data"]["summary"]["primary_category"], "Air Pollution")
         self.assertGreater(payload["data"]["summary"]["severity_score"], 30.0)
+        self.assertIn("Wastewater / Sewerage", payload["data"]["summary"]["supported_complaint_categories"])
+        self.assertIn("Noise Pollution", payload["data"]["summary"]["excluded_complaint_categories"])
 
     def test_analyze_pollution_image_rejects_non_image_file(self):
         response = client.post(

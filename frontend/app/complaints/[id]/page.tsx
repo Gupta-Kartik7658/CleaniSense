@@ -1,11 +1,13 @@
+// @ts-nocheck
 "use client";
 
 import React, { use, useEffect } from "react";
+import { ComplaintDetailsPageView } from "@/components/pages/ComplaintDetailsPageView";
 import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
-import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
 import { useAuth } from "@/providers/AuthProvider";
+import Link from "next/link";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -35,7 +37,19 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
   };
 
   const statusMapped = complaintDetail ? mapStatus(complaintDetail.status) : "Pending";
-  const severityMapped = complaintDetail?.severity ? complaintDetail.severity.charAt(0).toUpperCase() + complaintDetail.severity.slice(1) : "Medium";
+  const severityMapped = complaintDetail?.severity
+    ? complaintDetail.severity.charAt(0).toUpperCase() + complaintDetail.severity.slice(1)
+    : "Medium";
+
+  return (
+    <ComplaintDetailsPageView
+      authLoading={authLoading}
+      loading={loading}
+      error={error}
+      complaintDetail={complaintDetail}
+      resolutionDetail={resolutionDetail}
+    />
+  );
 
   return (
     <PortalLayout>

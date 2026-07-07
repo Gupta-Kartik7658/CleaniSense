@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useTheme } from "@/providers/ThemeProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { useTranslationUtility } from "@/providers/TranslationProvider";
@@ -15,6 +16,7 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
   const { preferences, updatePreferences } = useProfile();
   const router = useRouter();
+  const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const { locale: currentLocale, changeLanguage } = useTranslationUtility();
 
@@ -77,13 +79,13 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
 
   const selectLanguage = (code: string) => {
     changeLanguage(code);
-    updatePreferences({ language: code });
+    void updatePreferences({ language: code }).catch(() => undefined);
   };
 
   const toggleNotifications = () => {
     const newState = !notifEnabled;
     setNotifEnabled(newState);
-    updatePreferences({ notifications_enabled: newState });
+    void updatePreferences({ notifications_enabled: newState }).catch(() => undefined);
   };
 
   if (loading) {
@@ -114,219 +116,296 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
     { value: "system", label: "System" },
   ];
 
+  const navigation = [
+    { href: "/dashboard", label: tNav("dashboard"), note: "Overview and activity" },
+    { href: "/complaints", label: "Report Issue", note: "Submit a new complaint" },
+    { href: "/complaints/history", label: tNav("complaints"), note: "Track submissions" },
+    { href: "/hotspots", label: tNav("hotspots"), note: "Review nearby clusters" },
+    { href: "/profile", label: tNav("profile"), note: "Account and preferences" },
+  ];
+
+  const currentSection =
+    navigation.find((item) =>
+      item.href === "/complaints"
+        ? pathname === "/complaints"
+        : pathname === item.href || pathname.startsWith(`${item.href}/`)
+    ) ?? navigation[0];
+
+  const initials = user.name
+    ? user.name
+        .split(" ")
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "CS";
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-150">
-      
-      {/* Top Header Navigation */}
-      <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 transition-colors duration-150">
-        <div className="max-w-[1400px] mx-auto px-6 md:px-8 h-full flex items-center justify-between">
-          
-          {/* Logo & Title */}
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-white font-extrabold text-sm shadow-sm">
-                CS
+    <div className="relative min-h-screen">
+      <div className="mx-auto flex min-h-screen max-w-[1520px] gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <aside className="hidden lg:block lg:w-[290px]">
+          <div className="sticky top-4 space-y-4">
+            <div className="glass-panel space-y-5 p-5">
+              <Link href="/" className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[color:var(--foreground)] text-sm font-semibold text-[color:var(--surface-strong)]">
+                  CS
+                </div>
+                <div>
+                  <p className="text-base font-semibold tracking-tight text-[color:var(--foreground)]">CleaniSense</p>
+                  <p className="fine-print">{tNav("portal")}</p>
+                </div>
+              </Link>
+
+              <div className="section-card space-y-4 p-5">
+                <span className="page-kicker">Citizen Workspace</span>
+                <div className="space-y-2">
+                  <h2 className="text-xl font-semibold tracking-tight text-[color:var(--foreground)]">
+                    Report local pollution and follow every update
+                  </h2>
+                  <p className="fine-print">
+                    This workspace is focused on the live citizen features already implemented in the product.
+                  </p>
+                </div>
+                <Link href="/complaints" className="primary-action w-full">
+                  Report New Issue
+                </Link>
               </div>
-              <span className="text-base font-extrabold tracking-tight text-slate-900 dark:text-white">CleaniSense</span>
-            </Link>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest pl-2 border-l border-slate-200 dark:border-slate-800 hidden sm:inline-block">
-              {tNav("portal")}
-            </span>
+            </div>
+
+            <div className="glass-panel p-4">
+              <p className="metric-label px-2 pb-3">Navigation</p>
+              <nav className="space-y-1.5">
+                {navigation.map((item) => {
+                  const active =
+                    item.href === "/complaints"
+                      ? pathname === "/complaints"
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-start justify-between gap-3 rounded-[18px] px-4 py-3 ${
+                        active
+                          ? "border border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent-strong)]"
+                          : "border border-transparent hover:bg-[color:var(--surface-muted)]"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">{item.label}</p>
+                        <p className={`text-xs ${active ? "text-[color:var(--accent-strong)]" : "text-[color:var(--foreground-soft)]"}`}>
+                          {item.note}
+                        </p>
+                      </div>
+                      <span className={`mt-1 text-xs ${active ? "text-[color:var(--accent-strong)]" : "text-[color:var(--foreground-soft)]"}`}>
+                        →
+                      </span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            <div className="section-card space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="metric-label">Synced Preferences</p>
+                <span className="pill-badge tone-accent">{currentLocale.toUpperCase()}</span>
+              </div>
+              <p className="fine-print">
+                Theme: {theme}. Notifications: {notifEnabled ? "enabled" : "muted"}.
+              </p>
+            </div>
           </div>
+        </aside>
 
-          {/* Navigation Links in Header */}
-          <nav className="hidden md:flex items-center space-x-8 text-xs font-bold text-slate-500 dark:text-slate-400">
-            <Link href="/dashboard" className="hover:text-emerald-600 dark:hover:text-emerald-450 transition-colors">{tNav("dashboard")}</Link>
-            <Link href="/complaints/history" className="hover:text-emerald-600 dark:hover:text-emerald-455 transition-colors">{tNav("complaints")}</Link>
-            <Link href="/hotspots" className="hover:text-emerald-600 dark:hover:text-emerald-450 transition-colors">{tNav("hotspots")}</Link>
-            <Link href="/profile" className="hover:text-emerald-600 dark:hover:text-emerald-455 transition-colors">{tNav("profile")}</Link>
-          </nav>
+        <div className="min-w-0 flex-1 space-y-4">
+          <header className="glass-panel sticky top-4 z-40 px-4 py-4 sm:px-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Link href="/" className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[color:var(--foreground)] text-sm font-semibold text-[color:var(--surface-strong)] lg:hidden">
+                  CS
+                </Link>
+                <div className="space-y-1">
+                  <p className="metric-label">{currentSection.label}</p>
+                  <h1 className="text-lg font-semibold tracking-tight text-[color:var(--foreground)]">
+                    {currentSection.note}
+                  </h1>
+                </div>
+              </div>
 
-          {/* Right Header items */}
-          <div className="flex items-center space-x-6">
-            
-            {/* Notifications Bell */}
-            <NotificationBell />
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <div className="hidden md:flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface-strong)] px-3 py-2">
+                  <span className="text-xs font-semibold text-[color:var(--foreground)]">{user.name || user.email}</span>
+                  <span className="pill-badge">{user.role || "citizen"}</span>
+                </div>
+                <NotificationBell />
 
-            {/* Profile Avatar and Dropdown Trigger */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center space-x-3 border-l border-slate-200 dark:border-slate-800 pl-6 focus:outline-none rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                aria-haspopup="true"
-                aria-expanded={dropdownOpen}
-                aria-label="User preferences menu"
-              >
-                {user.profile_picture ? (
-                  <img
-                    src={user.profile_picture}
-                    alt="Profile Avatar"
-                    className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-800"
-                  />
-                ) : (
-                  <div className="w-8 h-8 bg-slate-250 dark:bg-slate-800 text-slate-700 dark:text-slate-350 font-bold text-xs rounded-full flex items-center justify-center">
-                    {user.name ? user.name.substring(0, 2).toUpperCase() : "US"}
-                  </div>
-                )}
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-350 hidden md:inline-block">
-                  {user.name || user.email}
-                </span>
-                <span className="text-[10px] text-slate-400">▼</span>
-              </button>
-
-              {/* Quick Preferences Dropdown Menu */}
-              {dropdownOpen && (
-                <div className="absolute right-0 mt-3 w-[310px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg py-4 z-50 text-left transition-all duration-150 ease-in-out">
-                  
-                  {/* Account Header */}
-                  <div className="px-4 pb-3 flex items-center space-x-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setDropdownOpen(!dropdownOpen)}
+                    className="flex items-center gap-3 rounded-[18px] border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-2"
+                    aria-haspopup="true"
+                    aria-expanded={dropdownOpen}
+                    aria-label="User preferences menu"
+                  >
                     {user.profile_picture ? (
                       <img
                         src={user.profile_picture}
                         alt="Profile Avatar"
-                        className="w-10 h-10 rounded-full border border-slate-200 dark:border-slate-800"
+                        className="h-9 w-9 rounded-full border border-[color:var(--line)] object-cover"
                       />
                     ) : (
-                      <div className="w-10 h-10 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold text-sm rounded-full flex items-center justify-center">
-                        {user.name ? user.name.substring(0, 2).toUpperCase() : "US"}
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[color:var(--accent-soft)] text-xs font-semibold text-[color:var(--accent-strong)]">
+                        {initials}
                       </div>
                     )}
-                    <div className="space-y-0.5 min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 justify-between">
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white truncate">
-                          {user.name || "User"}
-                        </h4>
-                        <span className="text-[9px] bg-emerald-50 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-400 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider">
-                          {user.role || "Citizen"}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-450 dark:text-slate-500 truncate">
-                        {user.email}
-                      </p>
+                    <div className="hidden text-left sm:block">
+                      <p className="text-sm font-semibold text-[color:var(--foreground)]">{user.name || "Citizen"}</p>
+                      <p className="text-xs text-[color:var(--foreground-soft)]">{preferences?.theme || theme}</p>
                     </div>
-                  </div>
+                    <span className="text-xs text-[color:var(--foreground-soft)]">▼</span>
+                  </button>
 
-                  {/* Preferences Options */}
-                  <div className="px-4 py-3 space-y-4">
-                    <h5 className="text-[9px] font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                      Quick Preferences
-                    </h5>
+                  {dropdownOpen && (
+                    <div className="absolute right-0 mt-3 w-[320px] overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-4 shadow-[var(--shadow-pop)]">
+                      <div className="flex items-center gap-3 border-b border-[color:var(--line)] pb-4">
+                        {user.profile_picture ? (
+                          <img
+                            src={user.profile_picture}
+                            alt="Profile Avatar"
+                            className="h-11 w-11 rounded-full border border-[color:var(--line)] object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[color:var(--accent-soft)] text-sm font-semibold text-[color:var(--accent-strong)]">
+                            {initials}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-[color:var(--foreground)]">{user.name || "Citizen"}</p>
+                          <p className="truncate text-xs text-[color:var(--foreground-soft)]">{user.email}</p>
+                        </div>
+                        <span className="pill-badge">{user.role || "citizen"}</span>
+                      </div>
 
-                    {/* Language Selector */}
-                    <div className="space-y-1.5 text-left">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block flex items-center gap-1.5">
-                        <span>🌐</span> Language
-                      </label>
-                      <div className="grid grid-cols-3 gap-1 text-[9px]">
-                        {languages.map((lang) => (
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <label className="field-label">Language</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {languages.map((lang) => (
+                              <button
+                                key={lang.code}
+                                onClick={() => selectLanguage(lang.code)}
+                                className={`rounded-[14px] border px-2 py-2 text-[0.72rem] font-semibold ${
+                                  currentLocale === lang.code
+                                    ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent-strong)]"
+                                    : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground-soft)]"
+                                }`}
+                              >
+                                {lang.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="field-label">Appearance</label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {themes.map((themeOption) => (
+                              <button
+                                key={themeOption.value}
+                                onClick={() => {
+                                  setTheme(themeOption.value as "light" | "dark" | "system");
+                                  void updatePreferences({ theme: themeOption.value }).catch(() => undefined);
+                                }}
+                                className={`rounded-[14px] border px-2 py-2 text-[0.72rem] font-semibold ${
+                                  theme === themeOption.value
+                                    ? "border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent-strong)]"
+                                    : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground-soft)]"
+                                }`}
+                              >
+                                {themeOption.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between rounded-[18px] border border-[color:var(--line)] bg-[color:var(--surface-strong)] px-4 py-3">
+                          <div>
+                            <p className="text-sm font-semibold text-[color:var(--foreground)]">Notifications</p>
+                            <p className="text-xs text-[color:var(--foreground-soft)]">
+                              {notifEnabled ? "Alert feed enabled" : "Alert feed muted"}
+                            </p>
+                          </div>
                           <button
-                            key={lang.code}
-                            onClick={() => selectLanguage(lang.code)}
-                            className={`py-1 rounded border font-bold cursor-pointer transition-all ${
-                              currentLocale === lang.code
-                                ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-450"
-                                : "border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            onClick={toggleNotifications}
+                            className={`relative inline-flex h-6 w-11 shrink-0 rounded-full ${
+                              notifEnabled ? "bg-[color:var(--foreground)]" : "bg-[color:var(--surface-muted)]"
                             }`}
                           >
-                            {lang.name}
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 translate-y-0.5 rounded-full bg-[color:var(--surface-strong)] shadow-sm transition-transform ${
+                                notifEnabled ? "translate-x-5" : "translate-x-1"
+                              }`}
+                            />
                           </button>
-                        ))}
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 border-t border-[color:var(--line)] pt-4">
+                        <Link
+                          href="/profile"
+                          onClick={() => setDropdownOpen(false)}
+                          className="secondary-action w-full justify-between"
+                        >
+                          {tCommon("accountSettings")}
+                          <span aria-hidden="true">→</span>
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setDropdownOpen(false);
+                            void logout();
+                          }}
+                          className="ghost-action w-full justify-between text-[color:var(--danger)]"
+                        >
+                          {tCommon("signOut")}
+                          <span aria-hidden="true">→</span>
+                        </button>
                       </div>
                     </div>
-
-                    {/* Appearance (Theme Mode) Selector */}
-                    <div className="space-y-1.5 text-left">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block flex items-center gap-1.5">
-                        <span>🎨</span> Appearance
-                      </label>
-                      <div className="grid grid-cols-3 gap-1 text-[9px]">
-                        {themes.map((t) => (
-                          <button
-                            key={t.value}
-                            onClick={() => {
-                              setTheme(t.value as any);
-                              updatePreferences({ theme: t.value });
-                            }}
-                            className={`py-1 rounded border font-bold cursor-pointer transition-all ${
-                              theme === t.value
-                                ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-450"
-                                : "border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                            }`}
-                          >
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Notifications Switch toggle */}
-                    <div className="flex justify-between items-center text-left">
-                      <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                        <span>🔔</span> Notifications
-                      </label>
-                      <button
-                        onClick={toggleNotifications}
-                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                          notifEnabled ? "bg-emerald-600" : "bg-slate-200 dark:bg-slate-800"
-                        }`}
-                      >
-                        <span
-                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-205 ease-in-out ${
-                            notifEnabled ? "translate-x-4" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                    </div>
-
-                    {/* Accessibility option panel */}
-                    <div className="flex justify-between items-center text-left">
-                      <span className="text-[10px] font-bold text-slate-500 dark:text-slate-405 flex items-center gap-1.5 opacity-60">
-                        <span>♿</span> Accessibility
-                      </span>
-                      <span className="text-[8px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                        {tCommon("comingSoon")}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Account Settings Link */}
-                  <div className="border-t border-slate-100 dark:border-slate-800 pt-2 px-2">
-                    <Link
-                      href="/profile"
-                      onClick={() => setDropdownOpen(false)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <span>⚙</span> {tCommon("accountSettings")}
-                    </Link>
-                  </div>
-
-                  {/* Sign Out Button */}
-                  <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 px-2">
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        logout();
-                      }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer text-left"
-                    >
-                      <span>🚪</span> {tCommon("signOut")}
-                    </button>
-                  </div>
-
+                  )}
                 </div>
-              )}
+              </div>
             </div>
+          </header>
 
-          </div>
+          <nav className="glass-panel flex gap-2 overflow-x-auto px-3 py-3 lg:hidden">
+            {navigation.map((item) => {
+              const active =
+                item.href === "/complaints"
+                  ? pathname === "/complaints"
+                  : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold ${
+                    active
+                      ? "border border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent-strong)]"
+                      : "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground-soft)]"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+
+          <main className="page-shell pb-8">
+            {children}
+          </main>
         </div>
-      </header>
-
-      {/* Main Panel Content Container */}
-      <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 md:px-8 py-8">
-        {children}
-      </main>
-
+      </div>
     </div>
   );
 }

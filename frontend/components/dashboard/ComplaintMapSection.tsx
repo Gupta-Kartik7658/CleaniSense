@@ -20,14 +20,15 @@ interface ComplaintMapSectionProps {
 
 export function ComplaintMapSection({ mapData, loading = false }: ComplaintMapSectionProps) {
   return (
-    <section className="space-y-3">
+    <section className="section-card space-y-4">
       <div className="flex items-end justify-between">
-        <div>
-          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Complaint Map
+        <div className="space-y-1">
+          <p className="metric-label">Map View</p>
+          <h2 className="text-xl font-semibold tracking-tight text-[color:var(--foreground)]">
+            Complaint map
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Your reports on OpenStreetMap — clusters form within 50 meters
+          <p className="fine-print">
+            Your reports on OpenStreetMap with 50 meter hotspot clustering
           </p>
         </div>
       </div>

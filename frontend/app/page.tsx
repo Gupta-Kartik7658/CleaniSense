@@ -4,6 +4,352 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/providers/AuthProvider";
 
+const liveFeatures = [
+  {
+    title: "Submit complaints with evidence",
+    description:
+      "Share a title, description, location, coordinates, and image or PDF proof from one citizen form.",
+  },
+  {
+    title: "Track review and resolution",
+    description:
+      "Follow each complaint through pending, review, rejection, or final resolution with a visible timeline.",
+  },
+  {
+    title: "Check active hotspots nearby",
+    description:
+      "See pollution clusters already flagged around your ward and understand which areas need faster action.",
+  },
+  {
+    title: "Keep your account preferences synced",
+    description:
+      "Use Google sign-in and manage your language, theme, and notification preferences from one profile area.",
+  },
+];
+
+const steps = [
+  {
+    title: "Log the issue",
+    description: "Enter the location, category, and evidence so the complaint starts with useful context.",
+  },
+  {
+    title: "Review the status",
+    description: "Track movement through the audit trail instead of losing visibility after submission.",
+  },
+  {
+    title: "Monitor local patterns",
+    description: "Use the hotspot view to understand whether your complaint is part of a larger cluster.",
+  },
+];
+
+const dashboardSignals = [
+  "Citizen dashboard with live summary cards",
+  "Complaint history and detail pages",
+  "Hotspot list and map-ready view",
+  "Notifications and preference controls",
+];
+
+function LandingExperience({
+  scrolled,
+  authError,
+  isAuthenticated,
+  loading,
+  handleLogin,
+}: {
+  scrolled: boolean;
+  authError: string | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+  handleLogin: () => Promise<void>;
+}) {
+  return (
+    <div className="relative min-h-screen overflow-x-hidden">
+      <header
+        className={`sticky top-0 z-50 transition-all duration-200 ${
+          scrolled
+            ? "border-b border-[color:var(--line)] bg-[color:var(--surface)]"
+            : "bg-[color:var(--surface)]"
+        }`}
+      >
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[color:var(--brand-strong)] text-sm font-semibold text-white">
+              CS
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[color:var(--ink-strong)]">CleaniSense</p>
+              <p className="text-xs text-[color:var(--ink-soft)]">Citizen pollution reporting</p>
+            </div>
+          </Link>
+
+          <nav className="hidden items-center gap-6 text-sm text-[color:var(--ink-soft)] lg:flex">
+            <a href="#overview" className="transition hover:text-[color:var(--ink-strong)]">
+              Overview
+            </a>
+            <a href="#workflow" className="transition hover:text-[color:var(--ink-strong)]">
+              Workflow
+            </a>
+            <a href="#features" className="transition hover:text-[color:var(--ink-strong)]">
+              Features
+            </a>
+          </nav>
+
+          {isAuthenticated ? (
+            <Link href="/dashboard" className="primary-action">
+              Open Dashboard
+            </Link>
+          ) : (
+            <button type="button" onClick={handleLogin} disabled={loading} className="primary-action">
+              {loading ? "Connecting..." : "Continue with Google"}
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main>
+        <section id="overview" className="mx-auto max-w-7xl px-5 pb-14 pt-10 sm:px-6 lg:px-8 lg:pb-18 lg:pt-16">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-center">
+            <div className="space-y-7">
+              <div className="space-y-4">
+                <p className="page-kicker">Citizen Portal</p>
+                <h1 className="page-title max-w-3xl text-4xl sm:text-5xl lg:text-6xl">
+                  Report local pollution clearly, then follow what happens next.
+                </h1>
+                <p className="page-copy max-w-2xl">
+                  CleaniSense is already set up for the citizen-side workflows that matter most right now:
+                  submitting complaints, reviewing status updates, checking nearby hotspots, and managing your
+                  account preferences.
+                </p>
+              </div>
+
+              {authError ? <div className="note-danger max-w-xl">{authError}</div> : null}
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {isAuthenticated ? (
+                  <Link href="/dashboard" className="primary-action">
+                    Go to Dashboard
+                  </Link>
+                ) : (
+                  <button type="button" onClick={handleLogin} disabled={loading} className="primary-action">
+                    {loading ? "Connecting..." : "Start with Google"}
+                  </button>
+                )}
+                <Link href="/complaints/history" className="secondary-action">
+                  View Complaint History
+                </Link>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="metric-card">
+                  <p className="metric-label">Live Today</p>
+                  <p className="metric-value">4</p>
+                  <p className="metric-note">Citizen flows currently supported in the frontend.</p>
+                </div>
+                <div className="metric-card">
+                  <p className="metric-label">Auth</p>
+                  <p className="metric-value">Google</p>
+                  <p className="metric-note">One sign-in path, wired to the existing backend session flow.</p>
+                </div>
+                <div className="metric-card">
+                  <p className="metric-label">Evidence</p>
+                  <p className="metric-value">Images + PDF</p>
+                  <p className="metric-note">The complaint form accepts proof attachments already handled by the API.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="hero-card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="metric-label">Current Product Shape</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-[color:var(--ink-strong)]">Built for real field reporting</h2>
+                </div>
+                <span className="pill-badge tone-success">Working</span>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+                <div className="section-card !bg-[color:var(--surface-muted)]">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="metric-label">Citizen Dashboard</p>
+                        <p className="mt-1 text-lg font-semibold text-[color:var(--ink-strong)]">Operational surfaces</p>
+                      </div>
+                      <span className="pill-badge">Portal</span>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {dashboardSignals.map((item) => (
+                        <div
+                          key={item}
+                          className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4 text-sm text-[color:var(--ink)]"
+                        >
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="section-card relative overflow-hidden">
+                  <div className="topo-grid absolute inset-0 opacity-80" />
+                  <div className="relative space-y-4">
+                    <p className="metric-label">Workflow</p>
+                    <div className="timeline-rail">
+                      <div className="timeline-node timeline-node-active">1</div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-[color:var(--ink-strong)]">Complaint created</p>
+                        <p className="text-sm text-[color:var(--ink-soft)]">Title, location, category, and evidence added.</p>
+                      </div>
+                    </div>
+                    <div className="timeline-rail">
+                      <div className="timeline-node">2</div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-[color:var(--ink-strong)]">Status tracked</p>
+                        <p className="text-sm text-[color:var(--ink-soft)]">Users can check timeline updates and resolution output.</p>
+                      </div>
+                    </div>
+                    <div className="timeline-rail">
+                      <div className="timeline-node">3</div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-[color:var(--ink-strong)]">Hotspots reviewed</p>
+                        <p className="text-sm text-[color:var(--ink-soft)]">Clustered problem areas remain visible beyond one report.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="border-y border-[color:var(--line)] bg-[color:var(--surface)]/80">
+          <div className="mx-auto grid max-w-7xl gap-4 px-5 py-5 text-sm text-[color:var(--ink-soft)] sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+            <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4">
+              Focused on implemented citizen workflows
+            </div>
+            <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4">
+              Google authentication already connected
+            </div>
+            <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4">
+              Complaint detail and resolution trail available
+            </div>
+            <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4">
+              Hotspots, notifications, and preferences included
+            </div>
+          </div>
+        </section>
+
+        <section id="workflow" className="mx-auto max-w-7xl px-5 py-16 sm:px-6 lg:px-8">
+          <div className="mb-8 max-w-2xl space-y-3">
+            <p className="page-kicker">Workflow</p>
+            <h2 className="page-title text-3xl sm:text-4xl">A straightforward reporting loop for citizens</h2>
+            <p className="page-copy">
+              The current frontend should feel dependable and specific. These are the flows already supported end
+              to end, so the design keeps attention there instead of previewing unfinished modules.
+            </p>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {steps.map((step, index) => (
+              <article key={step.title} className="section-card">
+                <div className="flex items-center justify-between">
+                  <span className="pill-badge">Step {index + 1}</span>
+                  <span className="text-xs text-[color:var(--ink-faint)]">Citizen side</span>
+                </div>
+                <h3 className="mt-5 text-xl font-semibold text-[color:var(--ink-strong)]">{step.title}</h3>
+                <p className="mt-3 text-sm leading-6 text-[color:var(--ink-soft)]">{step.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="features" className="mx-auto max-w-7xl px-5 pb-20 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <div className="section-card">
+              <p className="page-kicker">Live Features</p>
+              <h2 className="mt-3 text-3xl font-semibold text-[color:var(--ink-strong)]">
+                The product surface matches the APIs that are already in place.
+              </h2>
+              <div className="mt-8 space-y-4">
+                {liveFeatures.map((feature) => (
+                  <div key={feature.title} className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-4">
+                    <h3 className="text-base font-semibold text-[color:var(--ink-strong)]">{feature.title}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[color:var(--ink-soft)]">{feature.description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="glass-panel">
+                <p className="metric-label">Why this scope</p>
+                <h3 className="mt-2 text-2xl font-semibold text-[color:var(--ink-strong)]">No placeholders for unfinished SRS items</h3>
+                <p className="mt-3 text-sm leading-6 text-[color:var(--ink-soft)]">
+                  The refreshed frontend intentionally avoids exposing future-only ideas like incomplete prediction,
+                  municipal control panels, or advanced analytics pages. What users see now is what they can actually use.
+                </p>
+              </div>
+
+              <div className="section-card">
+                <p className="metric-label">Start Here</p>
+                <div className="mt-4 space-y-3 text-sm text-[color:var(--ink-soft)]">
+                  <div className="flex items-start gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-4 py-4">
+                    <span className="pill-badge">A</span>
+                    <div>
+                      <p className="font-semibold text-[color:var(--ink-strong)]">Sign in with Google</p>
+                      <p className="mt-1">This is the supported entry path for the citizen portal right now.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-4 py-4">
+                    <span className="pill-badge">B</span>
+                    <div>
+                      <p className="font-semibold text-[color:var(--ink-strong)]">Submit a complaint with evidence</p>
+                      <p className="mt-1">Use the live form to create a report and upload attachments.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] px-4 py-4">
+                    <span className="pill-badge">C</span>
+                    <div>
+                      <p className="font-semibold text-[color:var(--ink-strong)]">Track the complaint and nearby hotspots</p>
+                      <p className="mt-1">Review detail pages, status history, and hotspot clusters from the dashboard.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="hero-card">
+                <div className="space-y-3">
+                  <p className="metric-label">Ready to use the portal</p>
+                  <h3 className="text-2xl font-semibold text-[color:var(--ink-strong)]">Move directly into the working frontend</h3>
+                  <p className="text-sm leading-6 text-[color:var(--ink-soft)]">
+                    The dashboard, complaint flows, hotspot screen, profile settings, and notifications are the
+                    areas now being polished for production quality.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  {isAuthenticated ? (
+                    <Link href="/dashboard" className="primary-action">
+                      Open Dashboard
+                    </Link>
+                  ) : (
+                    <button type="button" onClick={handleLogin} disabled={loading} className="primary-action">
+                      {loading ? "Connecting..." : "Sign In with Google"}
+                    </button>
+                  )}
+                  <Link href="/hotspots" className="secondary-action">
+                    Explore Hotspots
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 export default function Home() {
   const { login, loading, isAuthenticated } = useAuth();
   const [scrolled, setScrolled] = useState(false);
@@ -31,6 +377,16 @@ export default function Home() {
       setAuthError(err?.message || "Failed to establish secure connection. Please try again.");
     }
   };
+
+  return (
+    <LandingExperience
+      scrolled={scrolled}
+      authError={authError}
+      isAuthenticated={isAuthenticated}
+      loading={loading}
+      handleLogin={handleLogin}
+    />
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased">
