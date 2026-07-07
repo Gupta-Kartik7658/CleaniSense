@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
@@ -11,6 +12,8 @@ from app.models.municipality import Municipality
 from app.repositories.complaint import complaint_repository
 from app.schemas.complaint import ComplaintCreate, ComplaintUpdate
 from app.constants.enums import ComplaintStatus, UserRole
+
+logger = logging.getLogger("uvicorn")
 
 # Allowed state machine transitions mapping
 ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
@@ -43,11 +46,13 @@ class ComplaintService:
         Creates a complaint and logs the initial status timeline event.
         """
         # Validate category existence
+        logger.info(f"[ComplaintService] Validating category={obj_in.category_id}")
         category = db.query(ComplaintCategory).filter(
             ComplaintCategory.id == obj_in.category_id,
             ComplaintCategory.is_active == True
         ).first()
         if not category:
+            logger.warning(f"[ComplaintService] Invalid category_id={obj_in.category_id} — not found or inactive")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Selected complaint category is invalid or inactive"
@@ -55,21 +60,23 @@ class ComplaintService:
             
         # Validate municipality existence if provided
         if obj_in.municipality_id:
+            logger.info(f"[ComplaintService] Validating municipality={obj_in.municipality_id}")
             municipality = db.query(Municipality).filter(
                 Municipality.id == obj_in.municipality_id,
                 Municipality.is_active == True
             ).first()
             if not municipality:
+                logger.warning(f"[ComplaintService] Invalid municipality_id={obj_in.municipality_id}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Selected municipality is invalid or inactive"
                 )
 
         complaint = complaint_repository.create(db, obj_in, user_id)
+        logger.info(f"[ComplaintService] Complaint persisted — id={complaint.id}")
         
         # Add initial status timeline history entry
         # Standard status when creating is 'submitted' as citizen posts it
-        # (Though they can also save as draft, let's set initial status based on request context, default submitted)
         complaint.status = ComplaintStatus.SUBMITTED.value
         db.add(complaint)
         db.commit()
@@ -77,9 +84,10 @@ class ComplaintService:
         # Create timeline entry
         self._add_status_history_entry(db, complaint.id, complaint.status, "Complaint submitted", user_id)
         
-        # Optional: trigger notification dispatch hook (will be populated in Notification Phase 6)
+        # Optional: trigger notification dispatch hook
         self._dispatch_notification_hook(db, complaint, "SUBMITTED")
 
+        logger.info(f"[ComplaintService] Complaint fully created — id={complaint.id} status={complaint.status}")
         return complaint
 
     def get_complaint(self, db: Session, id: uuid.UUID, user_id: uuid.UUID, user_role: str) -> Complaint:
@@ -88,6 +96,7 @@ class ComplaintService:
         """
         complaint = complaint_repository.get(db, id)
         if not complaint:
+            logger.warning(f"[ComplaintService] Complaint not found — id={id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Complaint not found"
@@ -95,11 +104,19 @@ class ComplaintService:
             
         # Check permissions: citizens can only view their own complaints
         if user_role == UserRole.CITIZEN.value and complaint.user_id != user_id:
+            logger.warning(
+                f"[ComplaintService] Permission denied — user={user_id} tried to access "
+                f"complaint={id} owned by user={complaint.user_id}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to view this complaint"
             )
-            
+
+        # Generate fresh public URLs for any attachments (signed URLs for Supabase)
+        from app.services.storage_service import storage_service
+        storage_service.enrich_attachments(complaint)
+
         return complaint
 
     def list_complaints(self, db: Session, user_id: uuid.UUID, page: int, page_size: int) -> dict:
@@ -125,6 +142,7 @@ class ComplaintService:
         """
         # Validate status if provided
         if status_filter and status_filter not in [s.value for s in ComplaintStatus]:
+            logger.warning(f"[ComplaintService] Invalid status filter: '{status_filter}'")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status filter value: {status_filter}"
@@ -149,6 +167,7 @@ class ComplaintService:
             
         # Ownership check
         if complaint.user_id != user_id:
+            logger.warning(f"[ComplaintService] Update denied — user={user_id} complaint={id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to modify this complaint"
@@ -156,6 +175,7 @@ class ComplaintService:
             
         # Restrict edit based on status
         if complaint.status not in [ComplaintStatus.DRAFT.value, ComplaintStatus.SUBMITTED.value]:
+            logger.warning(f"[ComplaintService] Update denied — complaint={id} status={complaint.status}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Complaints cannot be modified once they transition to state: {complaint.status}"
@@ -186,6 +206,7 @@ class ComplaintService:
                 )
 
         update_data = obj_in.model_dump(exclude_unset=True)
+        logger.info(f"[ComplaintService] Updating complaint={id} fields={list(update_data.keys())}")
         
         # Update geo_point coordinate representation if lat/lng are updated
         if "latitude" in update_data or "longitude" in update_data:
@@ -208,6 +229,7 @@ class ComplaintService:
             
         # Ownership check
         if complaint.user_id != user_id:
+            logger.warning(f"[ComplaintService] Delete denied — user={user_id} complaint={id}")
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to delete this complaint"
@@ -215,11 +237,13 @@ class ComplaintService:
             
         # Status constraint check
         if complaint.status not in [ComplaintStatus.DRAFT.value, ComplaintStatus.SUBMITTED.value]:
+            logger.warning(f"[ComplaintService] Delete denied — complaint={id} status={complaint.status}")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Complaints cannot be deleted once they transition to state: {complaint.status}"
             )
 
+        logger.info(f"[ComplaintService] Soft-deleting complaint={id}")
         return complaint_repository.soft_delete(db, complaint, user_id)
 
     def transition_status(
@@ -245,10 +269,19 @@ class ComplaintService:
         allowed_next = ALLOWED_TRANSITIONS.get(current_status, [])
         
         if next_status not in allowed_next:
+            logger.warning(
+                f"[ComplaintService] Invalid transition — complaint={id} "
+                f"from='{current_status}' to='{next_status}' allowed={allowed_next}"
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status transition from '{current_status}' to '{next_status}'"
             )
+
+        logger.info(
+            f"[ComplaintService] Transitioning complaint={id} "
+            f"from='{current_status}' to='{next_status}' by={changed_by}"
+        )
 
         # If transitioning to resolved, require and create resolution report
         if next_status == ComplaintStatus.RESOLVED.value:
@@ -270,6 +303,7 @@ class ComplaintService:
                 date_resolved=datetime.now(timezone.utc)
             )
             db.add(resolution)
+            logger.info(f"[ComplaintService] Resolution report created for complaint={id}")
 
         # Transition status
         complaint.status = next_status
@@ -283,6 +317,7 @@ class ComplaintService:
         # Trigger notification hook
         self._dispatch_notification_hook(db, complaint, next_status.upper())
 
+        logger.info(f"[ComplaintService] Transition complete — complaint={id} status={next_status}")
         return complaint
 
     def _add_status_history_entry(

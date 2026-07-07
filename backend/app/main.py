@@ -5,12 +5,19 @@ from app.api.v1 import api_router
 from app.database.session import engine
 from app.database.base import Base
 from app.core.firebase import initialize_firebase
+import logging
 
 # Initialize Firebase Admin SDK
 initialize_firebase()
 
-# Automatically create database tables on application start for local development
-Base.metadata.create_all(bind=engine)
+logger = logging.getLogger("uvicorn")
+
+# Automatically create database tables on application start for local development.
+# Keep non-database routes available even if the local SQLite file is unhealthy.
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as exc:
+    logger.warning(f"Database bootstrap skipped due to startup error: {exc}")
 
 # Seed master data (categories, municipalities) if missing
 from app.database.seed import seed_db
@@ -43,11 +50,12 @@ app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(RequestValidationError, global_exception_handler)
 app.add_exception_handler(StarletteHTTPException, global_exception_handler)
 
-# Serve uploaded files static route
+# Serve uploaded files static route (only for local storage backend)
 import os
 from fastapi.staticfiles import StaticFiles
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
+if settings.STORAGE_BACKEND == "local":
+    os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 # Register v1 router
 app.include_router(api_router, prefix=settings.API_V1_STR)

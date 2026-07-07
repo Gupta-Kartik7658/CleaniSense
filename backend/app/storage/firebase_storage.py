@@ -32,6 +32,14 @@ class FirebaseStorage:
 
         return "firebase", storage_path, public_url
 
+    def get_public_url(self, storage_path: str) -> str:
+        """
+        Reconstructs the Firebase Storage download URL for the given path.
+        """
+        bucket = storage.bucket(name=self.bucket_name if self.bucket_name else None)
+        encoded_path = urllib.parse.quote(storage_path, safe='')
+        return f"https://firebasestorage.googleapis.com/v0/b/{bucket.name}/o/{encoded_path}?alt=media"
+
     def delete_file(self, storage_path: str) -> bool:
         """
         Deletes file from Firebase Storage bucket.

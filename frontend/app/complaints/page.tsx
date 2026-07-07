@@ -210,6 +210,9 @@ export default function ComplaintsPage() {
                 maxLength={500}
                 className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
               />
+              {title && title.length < 5 && (
+                <p className="text-[10px] text-rose-600 font-semibold mt-1">Title must be at least 5 characters long.</p>
+              )}
             </div>
 
             {/* Category Dropdown */}
@@ -250,6 +253,9 @@ export default function ComplaintsPage() {
                 minLength={20}
                 className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
               />
+              {description && description.length < 20 && (
+                <p className="text-[10px] text-rose-600 font-semibold mt-1">Description must be at least 20 characters long.</p>
+              )}
             </div>
 
             {/* Location Name */}
@@ -379,8 +385,8 @@ export default function ComplaintsPage() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || categories.length === 0}
-                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-500 text-white font-bold py-2.5 px-6 rounded-xl shadow-sm transition-colors text-xs cursor-pointer flex items-center justify-center gap-2"
+                disabled={submitting || categories.length === 0 || title.length < 5 || description.length < 20}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-500 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-xl shadow-sm transition-colors text-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>

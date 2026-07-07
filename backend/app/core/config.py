@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     FIREBASE_STORAGE_BUCKET: str = ""
     UPLOAD_DIR: str = "uploads"
     MAX_UPLOAD_SIZE_MB: int = 10
+
+    # Supabase Storage
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_BUCKET: str = "complaints"
     
     # Pagination
     DEFAULT_PAGE_SIZE: int = 20
