@@ -1,0 +1,63 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "complaints": "Complaints",
+    "hotspots": "Hotspots",
+    "profile": "Profile",
+    "portal": "Citizen Portal"
+  },
+  "dashboard": {
+    "title": "Citizen Dashboard",
+    "subtitle": "Environmental Reporting Platform",
+    "hero": {
+      "title": "Report an Environmental Issue",
+      "subtitle": "Help keep your community clean by reporting pollution, illegal dumping, smoke emissions, wastewater discharge, or other environmental hazards. Your report will be verified using AI and forwarded to the appropriate municipal authority.",
+      "ctaReport": "Report Issue",
+      "ctaView": "View My Reports"
+    },
+    "stats": {
+      "total": "Total Reports",
+      "active": "Active Reports",
+      "resolved": "Resolved Reports",
+      "hotspots": "Nearby Hotspots"
+    },
+    "reports": {
+      "title": "Recent Reports",
+      "viewAll": "View All →",
+      "emptyTitle": "No reports submitted yet.",
+      "emptyDesc": "Report your first environmental issue to help improve local community standards."
+    },
+    "hotspots": {
+      "title": "Nearby Hotspots",
+      "viewAll": "View All →",
+      "emptyDesc": "No hotspots identified in your immediate vicinity.",
+      "priorityHigh": "High Priority",
+      "priorityMedium": "Medium Priority",
+      "priorityLow": "Low Priority"
+    }
+  },
+  "profile": {
+    "title": "User Profile",
+    "role": "Organization Role",
+    "status": "Account Status",
+    "memberSince": "Member Since",
+    "theme": {
+      "title": "Theme Preference",
+      "desc": "Select how the CleaniSense interface appears on your device.",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "viewAll": "View all notifications",
+    "empty": "No notifications yet."
+  },
+  "common": {
+    "signOut": "Sign Out",
+    "accountSettings": "Account Settings",
+    "comingSoon": "Coming Soon"
+  }
+}
