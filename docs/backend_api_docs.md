@@ -56,11 +56,11 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 ### 3.1 Authentication
 
 #### `POST /api/v1/auth/login`
-- **Description**: Verifies a client-side Firebase ID token, creates the user profile if it is their first login, and registers the session.
+- **Description**: Verifies a client-side Firebase ID token, creates the user profile if it is their first login (or updates details of an existing user), and registers the session.
 - **Request Body**:
   ```json
   {
-    "id_token": "string"
+    "idToken": "string"
   }
   ```
 - **Response Data (`data` field)**:

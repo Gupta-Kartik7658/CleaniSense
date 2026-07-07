@@ -4,6 +4,12 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-07] Idempotent Authentication Login Flow & Document Verification
+
+#### Idempotent User Login Flow
+- **Idempotent Matching Logic**: Updated `AuthService.authenticate_user` in `backend/app/services/auth_service.py` to first search for the user by `firebase_uid`, then by `email`. If found, updates mutable user fields (name, profile picture) dynamically instead of inserting a new row, resolving the database conflict error (`UNIQUE constraint failed: users.email`).
+- **Validation Test Suite**: Added a unit test `test_idempotent_login` inside `backend/tests/test_auth.py` that mocks consecutive Firebase logins with the same email/UID, verifying that only one user record exists and that properties are updated correctly.
+
 ### [2026-07-06] Remove Alembic Migrations, Resolve Auth Race Condition & Workspace Cleanup
 
 #### Alembic Database Migrations Removal
