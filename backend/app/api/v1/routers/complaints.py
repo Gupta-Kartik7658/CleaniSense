@@ -174,6 +174,13 @@ async def upload_complaint_attachment(
     )
     
     logger.info(f"Attachment saved — id={attachment.id} provider={attachment.storage_provider}")
+    if attachment.file_type == "image":
+        complaint_service.apply_image_analysis_to_complaint(
+        db=db,
+        complaint=complaint,
+        image_content=content,
+        content_type=file.content_type or "image/jpeg",
+    )
     attachment_data = AttachmentResponse.model_validate(attachment)
     return standard_response(
         success=True,

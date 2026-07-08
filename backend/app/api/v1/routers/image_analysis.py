@@ -1,10 +1,13 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from typing import Optional
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 
 from app.schemas.pollution_image import (
     PollutionImageAnalysisResponse,
     PollutionImageSummaryResponse,
 )
 from app.services.pollution_image_service import pollution_image_service
+from app.services.gemini_vision_service import gemini_vision_service
 from app.utils.file_validation import validate_image_file
 from app.utils.response import StandardResponseModel, standard_response
 
@@ -19,7 +22,11 @@ router = APIRouter(prefix="/image-analysis", tags=["image-analysis"])
     summary="Analyze Pollution Image",
     description="Uploads an image and returns image-only pollution severity analysis.",
 )
-async def analyze_pollution_image(file: UploadFile = File(...)):
+async def analyze_pollution_image(
+    file: UploadFile = File(...),
+    category: Optional[str] = Query(None),
+    use_gemini: bool = Query(True),
+):
     """
     Analyze a single uploaded image using classical computer-vision heuristics only.
     """
@@ -30,7 +37,17 @@ async def analyze_pollution_image(file: UploadFile = File(...)):
     )
 
     try:
-        analysis = pollution_image_service.detect_pollution(content)
+        analysis = pollution_image_service.detect_pollution(content, category_name=category)
+        if use_gemini:
+            gemini_analysis = gemini_vision_service.analyze_image(
+                image_content=content,
+                mime_type=file.content_type or "image/jpeg",
+                category_name=category,
+                local_analysis=analysis,
+            )
+            if gemini_analysis:
+                analysis["ai_confidence_score"] = gemini_analysis["confidence_score"]
+                analysis["gemini_analysis"] = gemini_analysis
     except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -42,6 +59,7 @@ async def analyze_pollution_image(file: UploadFile = File(...)):
         dominant_type=analysis["dominant_type"],
         severity_score=analysis["severity_score"],
         severity_label=analysis["severity_label"],
+        ai_confidence_score=analysis["ai_confidence_score"],
         supported_pollution_types=analysis["metadata"]["supported_pollution_types"],
         image_shape=list(analysis["metadata"]["image_shape"]),
     )
@@ -53,6 +71,7 @@ async def analyze_pollution_image(file: UploadFile = File(...)):
         data={
             "summary": summary.model_dump(),
             "analysis": detailed.model_dump(),
+            "gemini_analysis": analysis.get("gemini_analysis"),
             "filename": file.filename,
             "content_type": file.content_type,
         },

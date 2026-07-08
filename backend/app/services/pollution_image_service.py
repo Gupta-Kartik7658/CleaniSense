@@ -42,6 +42,7 @@ class PollutionAnalysisResult:
     dominant_type: str
     severity_score: float
     severity_label: str
+    ai_confidence_score: float
     detectors: Dict[str, DetectorResult]
     color_features: Dict[str, float]
     texture_features: Dict[str, float]
@@ -53,6 +54,7 @@ class PollutionAnalysisResult:
             "dominant_type": self.dominant_type,
             "severity_score": round(float(self.severity_score), 2),
             "severity_label": self.severity_label,
+            "ai_confidence_score": round(float(self.ai_confidence_score), 2),
             "color_features": {
                 key: round(float(value), 4) for key, value in self.color_features.items()
             },
@@ -80,7 +82,11 @@ class PollutionImageService:
 
     MAX_DIMENSION = 1024
 
-    def analyze(self, image_input: ImageInput) -> PollutionAnalysisResult:
+    def analyze(
+        self,
+        image_input: ImageInput,
+        category_name: Optional[str] = None,
+    ) -> PollutionAnalysisResult:
         views = self._prepare_image_views(image_input)
         color_features = self.extract_color_features(views)
         texture_features = self.extract_texture_features(views["gray"])
@@ -88,16 +94,21 @@ class PollutionImageService:
         smoke = self.detect_smoke(views)
         dust_haze = self.detect_dust_haze(views)
         garbage = self.segment_garbage(views)
+        water_contamination = self.detect_water_contamination(views)
+        wastewater = self.detect_wastewater_sewerage(views)
 
         detectors = {
             smoke.name: smoke,
             dust_haze.name: dust_haze,
             garbage.name: garbage,
+            water_contamination.name: water_contamination,
+            wastewater.name: wastewater,
         }
 
-        dominant_type = max(detectors.values(), key=lambda item: item.score).name
+        dominant_type = self._select_dominant_type(detectors, category_name)
         severity_score = self.compute_image_severity(detectors, color_features, texture_features)
         severity_label = self._severity_label(severity_score)
+        ai_confidence_score = self._ai_confidence_proxy(detectors, dominant_type, category_name)
         positive_detectors = sum(1 for detector in detectors.values() if detector.detected)
         pollution_detected = positive_detectors > 0 and (
             severity_score >= 30.0 or detectors[dominant_type].score >= 0.35
@@ -108,6 +119,7 @@ class PollutionImageService:
             dominant_type=dominant_type if pollution_detected else "low_signal",
             severity_score=severity_score,
             severity_label=severity_label,
+            ai_confidence_score=ai_confidence_score,
             detectors=detectors,
             color_features=color_features,
             texture_features=texture_features,
@@ -117,16 +129,24 @@ class PollutionImageService:
                     "smoke",
                     "dust_haze",
                     "garbage_accumulation",
+                    "water_contamination",
+                    "wastewater_sewerage",
                 ],
+                "category_hint": category_name,
                 "note": (
-                    "Severity is image-only for now and should later be fused with "
-                    "survey, weather, and complaint-density signals from the SRS."
+                    "Classical CV runs first. The AI confidence score is a local "
+                    "verification proxy used for the SRS hybrid-confidence slot "
+                    "when an external Gemini Vision call is unavailable."
                 ),
             },
         )
 
-    def detect_pollution(self, image_input: ImageInput) -> Dict[str, Any]:
-        return self.analyze(image_input).to_dict()
+    def detect_pollution(
+        self,
+        image_input: ImageInput,
+        category_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self.analyze(image_input, category_name=category_name).to_dict()
 
     def extract_color_features(
         self,
@@ -424,22 +444,162 @@ class PollutionImageService:
             mask=full_mask,
         )
 
+    def detect_water_contamination(
+        self,
+        image_input: Union[ImageInput, Mapping[str, np.ndarray]],
+    ) -> DetectorResult:
+        views = (
+            image_input
+            if isinstance(image_input, Mapping)
+            else self._prepare_image_views(image_input)
+        )
+        hsv = views["hsv"]
+        gray = views["gray"]
+
+        hue = hsv[:, :, 0]
+        sat = hsv[:, :, 1]
+        val = hsv[:, :, 2]
+
+        green_algae = (hue >= 35) & (hue <= 92) & (sat >= 50) & (val >= 35) & (val <= 155)
+        chemical_tint = (hue >= 96) & (hue <= 125) & (sat >= 45) & (val >= 45) & (val <= 165)
+        dark_stagnant = (val <= 75) & (sat <= 95)
+        foam_like = (sat <= 45) & (val >= 180)
+        smooth_surface = cv2.GaussianBlur(gray, (9, 9), 0)
+        local_delta = cv2.absdiff(gray, smooth_surface)
+        low_texture = local_delta <= 22
+
+        candidate_mask = (green_algae | chemical_tint | dark_stagnant | foam_like) & low_texture
+        water_mask = self._clean_mask(candidate_mask, kernel_size=9)
+
+        coverage_ratio = self._mask_ratio(water_mask)
+        algae_ratio = float(np.mean(green_algae))
+        chemical_ratio = float(np.mean(chemical_tint))
+        dark_ratio = float(np.mean(dark_stagnant))
+        foam_ratio = float(np.mean(foam_like))
+        low_texture_ratio = float(np.mean(low_texture))
+
+        score = self._clip01(
+            0.40 * min(coverage_ratio / 0.30, 1.0)
+            + 0.16 * min(algae_ratio / 0.22, 1.0)
+            + 0.14 * min(chemical_ratio / 0.16, 1.0)
+            + 0.18 * min(dark_ratio / 0.35, 1.0)
+            + 0.07 * min(foam_ratio / 0.08, 1.0)
+            + 0.05 * low_texture_ratio
+        )
+        detected = bool(score >= 0.34 and coverage_ratio >= 0.03)
+
+        return DetectorResult(
+            name="water_contamination",
+            score=score,
+            coverage_ratio=coverage_ratio,
+            detected=detected,
+            features={
+                "algae_ratio": algae_ratio,
+                "chemical_tint_ratio": chemical_ratio,
+                "dark_stagnant_ratio": dark_ratio,
+                "foam_ratio": foam_ratio,
+                "low_texture_ratio": low_texture_ratio,
+            },
+            mask=water_mask,
+        )
+
+    def detect_wastewater_sewerage(
+        self,
+        image_input: Union[ImageInput, Mapping[str, np.ndarray]],
+    ) -> DetectorResult:
+        views = (
+            image_input
+            if isinstance(image_input, Mapping)
+            else self._prepare_image_views(image_input)
+        )
+        hsv = views["hsv"]
+        gray = views["gray"]
+
+        height, width = gray.shape
+        roi_start = int(height * 0.38)
+        hsv_roi = hsv[roi_start:, :, :]
+        gray_roi = gray[roi_start:, :]
+
+        hue = hsv_roi[:, :, 0]
+        sat = hsv_roi[:, :, 1]
+        val = hsv_roi[:, :, 2]
+
+        blackwater = (val <= 80) & (sat <= 110)
+        sewage_brown = (hue >= 8) & (hue <= 32) & (sat >= 35) & (val <= 150)
+        green_sludge = (hue >= 35) & (hue <= 88) & (sat >= 50) & (val <= 165)
+        slick_surface = cv2.GaussianBlur(gray_roi, (9, 9), 0)
+        local_delta = cv2.absdiff(gray_roi, slick_surface)
+        stagnant_texture = local_delta <= 18
+
+        candidate_roi = (blackwater | sewage_brown | green_sludge) & stagnant_texture
+        sewerage_roi_mask = self._clean_mask(candidate_roi, kernel_size=11)
+        sewerage_roi_mask = self._keep_large_regions(
+            sewerage_roi_mask,
+            min_area=max(80, int(height * width * 0.0008)),
+        )
+
+        full_mask = np.zeros_like(gray, dtype=np.uint8)
+        full_mask[roi_start:, :] = sewerage_roi_mask
+
+        coverage_ratio = self._mask_ratio(full_mask)
+        blackwater_ratio = float(np.mean(blackwater))
+        brown_ratio = float(np.mean(sewage_brown))
+        green_sludge_ratio = float(np.mean(green_sludge))
+        stagnant_ratio = float(np.mean(stagnant_texture))
+        lower_bias = self._lower_region_bias(full_mask, bottom_fraction=0.62)
+
+        score = self._clip01(
+            0.30 * min(coverage_ratio / 0.22, 1.0)
+            + 0.25 * min(blackwater_ratio / 0.35, 1.0)
+            + 0.18 * min(brown_ratio / 0.16, 1.0)
+            + 0.12 * min(green_sludge_ratio / 0.12, 1.0)
+            + 0.10 * stagnant_ratio
+            + 0.05 * lower_bias
+        )
+        detected = bool(score >= 0.34 and coverage_ratio >= 0.02)
+
+        return DetectorResult(
+            name="wastewater_sewerage",
+            score=score,
+            coverage_ratio=coverage_ratio,
+            detected=detected,
+            features={
+                "blackwater_ratio": blackwater_ratio,
+                "brown_ratio": brown_ratio,
+                "green_sludge_ratio": green_sludge_ratio,
+                "stagnant_ratio": stagnant_ratio,
+                "lower_bias": lower_bias,
+                "roi_start_ratio": roi_start / float(height),
+            },
+            mask=full_mask,
+        )
+
     def compute_image_severity(
         self,
         detectors: Mapping[str, DetectorResult],
         color_features: Mapping[str, float],
         texture_features: Mapping[str, float],
     ) -> float:
-        smoke_score = detectors["smoke"].score
-        dust_score = detectors["dust_haze"].score
-        garbage_score = detectors["garbage_accumulation"].score
+        smoke_score = self._effective_detector_score(detectors["smoke"])
+        dust_score = self._effective_detector_score(detectors["dust_haze"])
+        garbage_score = self._effective_detector_score(detectors["garbage_accumulation"])
+        water_score = self._effective_detector_score(detectors["water_contamination"])
+        wastewater_score = self._effective_detector_score(detectors["wastewater_sewerage"])
 
         weighted_signal = (
-            0.40 * smoke_score
-            + 0.30 * dust_score
-            + 0.30 * garbage_score
+            0.25 * smoke_score
+            + 0.20 * dust_score
+            + 0.20 * garbage_score
+            + 0.18 * water_score
+            + 0.17 * wastewater_score
         )
-        dominant_signal = max(smoke_score, dust_score, garbage_score)
+        dominant_signal = max(
+            smoke_score,
+            dust_score,
+            garbage_score,
+            water_score,
+            wastewater_score,
+        )
         texture_bonus = self._clip01(
             min(texture_features["glcm_contrast"] / 12.0, 1.0) * 0.6
             + min(texture_features["lbp_entropy"] / 3.5, 1.0) * 0.4
@@ -573,6 +733,14 @@ class PollutionImageService:
         top_pixels = np.sum(mask[:top_rows, :] > 0)
         return float(top_pixels / total_pixels)
 
+    def _lower_region_bias(self, mask: np.ndarray, bottom_fraction: float) -> float:
+        total_pixels = np.sum(mask > 0)
+        if total_pixels == 0:
+            return 0.0
+        start_row = max(0, int(mask.shape[0] * (1.0 - bottom_fraction)))
+        bottom_pixels = np.sum(mask[start_row:, :] > 0)
+        return float(bottom_pixels / total_pixels)
+
     def _normalize_map(self, map_array: np.ndarray) -> np.ndarray:
         map_array = map_array.astype(np.float32)
         min_value = float(np.min(map_array))
@@ -580,6 +748,37 @@ class PollutionImageService:
         if max_value - min_value < 1e-6:
             return np.zeros_like(map_array, dtype=np.float32)
         return (map_array - min_value) / (max_value - min_value)
+
+    def _effective_detector_score(self, detector: DetectorResult) -> float:
+        if detector.detected:
+            return detector.score
+        return detector.score * 0.35
+
+    def _select_dominant_type(
+        self,
+        detectors: Mapping[str, DetectorResult],
+        category_name: Optional[str],
+    ) -> str:
+        normalized_category = (category_name or "").lower()
+        category_preferences = []
+        if any(token in normalized_category for token in ["sewer", "sewage", "wastewater", "drain"]):
+            category_preferences = ["wastewater_sewerage", "water_contamination"]
+        elif any(token in normalized_category for token in ["water", "contamination", "chemical"]):
+            category_preferences = ["water_contamination", "wastewater_sewerage"]
+        elif any(token in normalized_category for token in ["waste", "garbage", "dump", "land"]):
+            category_preferences = ["garbage_accumulation"]
+        elif any(token in normalized_category for token in ["air", "smoke", "dust", "aqi", "quality"]):
+            category_preferences = ["smoke", "dust_haze"]
+
+        preferred = [
+            detectors[name]
+            for name in category_preferences
+            if name in detectors and detectors[name].score >= 0.30
+        ]
+        if preferred:
+            return max(preferred, key=lambda item: item.score).name
+
+        return max(detectors.values(), key=lambda item: item.score).name
 
     def _severity_label(self, severity_score: float) -> str:
         if severity_score < 30.0:
@@ -589,6 +788,36 @@ class PollutionImageService:
         if severity_score < 75.0:
             return "High"
         return "Critical"
+
+    def _ai_confidence_proxy(
+        self,
+        detectors: Mapping[str, DetectorResult],
+        dominant_type: str,
+        category_name: Optional[str],
+    ) -> float:
+        ordered_scores = sorted((detector.score for detector in detectors.values()), reverse=True)
+        dominant_score = ordered_scores[0] if ordered_scores else 0.0
+        runner_up = ordered_scores[1] if len(ordered_scores) > 1 else 0.0
+        margin = self._clip01((dominant_score - runner_up + 0.20) / 0.55)
+
+        category_bonus = 0.0
+        normalized_category = (category_name or "").lower()
+        category_groups = {
+            "smoke": ["air", "smoke", "aqi", "quality", "burning"],
+            "dust_haze": ["air", "dust", "construction", "aqi", "quality"],
+            "garbage_accumulation": ["waste", "garbage", "land", "dump", "solid"],
+            "water_contamination": ["water", "contamination", "chemical"],
+            "wastewater_sewerage": ["sewer", "sewage", "wastewater", "drain"],
+        }
+        if any(token in normalized_category for token in category_groups.get(dominant_type, [])):
+            category_bonus = 0.15
+
+        confidence = 100.0 * self._clip01(
+            0.65 * dominant_score
+            + 0.20 * margin
+            + category_bonus
+        )
+        return round(confidence, 2)
 
     def _clip01(self, value: float) -> float:
         return float(max(0.0, min(1.0, value)))

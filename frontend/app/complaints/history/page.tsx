@@ -54,7 +54,8 @@ export default function ComplaintsHistoryPage() {
         longitude: r.longitude,
         date: r.created_at,
         category: (r as any).category ? (r as any).category.name : "Other",
-        severity: r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : "Medium"
+        severity: r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : "Medium",
+        severityScore: r.severity_score
       }))
     : [];
 
@@ -163,15 +164,17 @@ export default function ComplaintsHistoryPage() {
                       <span className="text-slate-400">📍</span> {report.locationName}
                     </p>
                     <p>
-                      <span className="text-slate-400">⚠️</span> AI Severity:{" "}
+                      <span className="text-slate-400">⚠️</span> Severity:{" "}
                       <span
                         className={`font-semibold ${
-                          report.severity === "High"
+                          report.severity === "High" || report.severity === "Critical"
                             ? "text-rose-600 dark:text-rose-400"
                             : "text-amber-600 dark:text-amber-400"
                         }`}
                       >
-                        {report.severity}
+                        {report.severityScore !== undefined && report.severityScore !== null
+                          ? `${Math.round(report.severityScore)}% ${report.severity}`
+                          : report.severity}
                       </span>
                     </p>
                     <p>

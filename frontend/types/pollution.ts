@@ -14,7 +14,14 @@ export interface IncidentReport {
   userName: string;
   userEmail: string;
   type: 'air' | 'land' | 'water' | 'noise';
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: 'normal' | 'low' | 'moderate' | 'medium' | 'high' | 'critical';
+  severityScore?: number;
+  severityPercentage?: number;
+  imageSeverityScore?: number;
+  surveyScore?: number;
+  weatherScore?: number;
+  densityScore?: number;
+  severityBreakdown?: string;
   status: 'pending' | 'investigating' | 'resolved' | 'dismissed';
   description: string;
   location: GeoLocation;
@@ -66,7 +73,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'moderator' | 'user';
+  role: 'citizen' | 'municipality_officer' | 'municipality_admin' | 'super_admin' | 'admin' | 'moderator' | 'user';
   status: 'active' | 'suspended' | 'banned';
   reportsCount: number;
   joinedAt: string;

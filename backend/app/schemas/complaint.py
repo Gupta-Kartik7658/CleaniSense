@@ -120,6 +120,14 @@ class ComplaintResponse(BaseModel):
     description: str
     status: str
     severity: Optional[str] = None
+    severity_score: Optional[float] = None
+    image_severity_score: Optional[float] = None
+    ai_confidence_score: Optional[float] = None
+    survey_score: Optional[float] = None
+    weather_score: Optional[float] = None
+    density_score: Optional[float] = None
+    severity_breakdown: Optional[str] = None
+    image_analysis_summary: Optional[str] = None
     location_name: str
     latitude: float
     longitude: float

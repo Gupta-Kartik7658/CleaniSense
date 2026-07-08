@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     
     # Firebase
     GOOGLE_APPLICATION_CREDENTIALS: str = "firebase-service-account.json"
+
+    # Gemini Vision
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.1-flash-lite"
+    GEMINI_TIMEOUT_SECONDS: float = 4.0
+    GEMINI_ENABLED: bool = True
     
     # Storage
     STORAGE_BACKEND: str = "local"
