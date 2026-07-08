@@ -318,7 +318,7 @@ def get_admin_hotspots(
 ):
     db_hotspots = db.query(DBHotspot).all()
     hotspots_list = []
-    
+
     for h in db_hotspots:
         hotspots_list.append({
             "id": str(h.id),
@@ -329,8 +329,8 @@ def get_admin_hotspots(
                 "district": "",
                 "state": ""
             },
-            "radius": h.radius_meters or 300,
-            "incidentCount": h.incident_count or 5,
+            "radius": 300,  # Fixed default until a radius column exists on the model
+            "incidentCount": h.reports_count,
             "averageSeverity": 3.5,
             "dominantType": "air",
             "trend": "stable",
@@ -514,7 +514,8 @@ def get_database_backup(
                 "id": str(h.id),
                 "latitude": h.latitude,
                 "longitude": h.longitude,
-                "intensity": h.intensity,
+                "severity": h.severity,
+                "reports_count": h.reports_count,
                 "created_at": h.created_at.isoformat() if h.created_at else None
             } for h in hotspots
         ]

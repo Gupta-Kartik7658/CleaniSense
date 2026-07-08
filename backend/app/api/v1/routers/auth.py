@@ -34,9 +34,12 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
             detail=str(e)
         )
     except Exception as e:
+        # Log full detail server-side, return generic message to client.
+        import logging
+        logging.getLogger("uvicorn").exception("Unhandled error during login")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Authentication server error: {e}"
+            detail="An unexpected error occurred during authentication. Please try again."
         )
 
 @router.get("/me", response_model=StandardResponseModel)
