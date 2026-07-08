@@ -27,6 +27,12 @@ export default function ComplaintsPage() {
   const [locationName, setLocationName] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
+  const [areaAffected, setAreaAffected] = useState("");
+  const [populationAffected, setPopulationAffected] = useState("");
+  const [durationHours, setDurationHours] = useState("");
+  const [severityHint, setSeverityHint] = useState("moderate");
+  const [vulnerablePeopleNearby, setVulnerablePeopleNearby] = useState(false);
+  const [activeLeakOrFire, setActiveLeakOrFire] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileErrors, setFileErrors] = useState<string | null>(null);
 
@@ -104,6 +110,9 @@ export default function ComplaintsPage() {
 
     const parsedLat = parseFloat(lat);
     const parsedLng = parseFloat(lng);
+    const parsedArea = areaAffected ? parseFloat(areaAffected) : undefined;
+    const parsedPopulation = populationAffected ? parseInt(populationAffected, 10) : undefined;
+    const parsedDuration = durationHours ? parseFloat(durationHours) : undefined;
 
     if (!categoryId || !title.trim() || !description.trim() || !locationName.trim() || !lat || !lng) {
       return;
@@ -125,6 +134,14 @@ export default function ComplaintsPage() {
       return;
     }
 
+    if (
+      (parsedArea !== undefined && (Number.isNaN(parsedArea) || parsedArea < 0)) ||
+      (parsedPopulation !== undefined && (Number.isNaN(parsedPopulation) || parsedPopulation < 0)) ||
+      (parsedDuration !== undefined && (Number.isNaN(parsedDuration) || parsedDuration < 0))
+    ) {
+      return;
+    }
+
     try {
       const complaint = await createComplaint(
         {
@@ -133,7 +150,15 @@ export default function ComplaintsPage() {
           category_id: categoryId,
           location_name: locationName.trim(),
           latitude: parsedLat,
-          longitude: parsedLng
+          longitude: parsedLng,
+          area_affected_sqm: parsedArea,
+          population_affected: parsedPopulation,
+          duration_hours: parsedDuration,
+          survey_data: {
+            severity: severityHint,
+            vulnerable_people_nearby: vulnerablePeopleNearby,
+            active_leak_or_fire: activeLeakOrFire
+          }
         },
         selectedFiles
       );
@@ -256,6 +281,88 @@ export default function ComplaintsPage() {
               {description && description.length < 20 && (
                 <p className="text-[10px] text-rose-600 font-semibold mt-1">Description must be at least 20 characters long.</p>
               )}
+            </div>
+
+            {/* Location Name */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Area Affected
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="sq. meters"
+                  value={areaAffected}
+                  onChange={(e) => setAreaAffected(e.target.value)}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  People Affected
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  placeholder="count"
+                  value={populationAffected}
+                  onChange={(e) => setPopulationAffected(e.target.value)}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Duration
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.5"
+                  placeholder="hours"
+                  value={durationHours}
+                  onChange={(e) => setDurationHours(e.target.value)}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Observed Severity
+                </label>
+                <select
+                  value={severityHint}
+                  onChange={(e) => setSeverityHint(e.target.value)}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                >
+                  <option value="normal">Normal</option>
+                  <option value="moderate">Moderate</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={vulnerablePeopleNearby}
+                  onChange={(e) => setVulnerablePeopleNearby(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                />
+                Vulnerable people nearby
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={activeLeakOrFire}
+                  onChange={(e) => setActiveLeakOrFire(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
+                />
+                Active leak or fire
+              </label>
             </div>
 
             {/* Location Name */}

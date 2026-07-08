@@ -87,6 +87,12 @@ export default function LoginPage() {
           <GoogleIcon />
           <span>{loading ? "Connecting..." : "Continue with Google"}</span>
         </button>
+        <Link
+          href="/forgot-password"
+          className="block text-center text-[11px] font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+        >
+          Forgot password?
+        </Link>
       </div>
 
       <div className="text-[10px] text-slate-400 text-center leading-relaxed">
