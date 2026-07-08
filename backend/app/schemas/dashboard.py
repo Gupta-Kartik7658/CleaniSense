@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from app.schemas.complaint import ComplaintResponse
@@ -67,3 +68,25 @@ class DashboardResponse(BaseModel):
     complaint_map: ComplaintMapData
     unread_notifications: int
     preferences: UserPreferenceBase
+
+class MunicipalityDashboardOverview(BaseModel):
+    total_reports: int
+    active_reports: int
+    resolved_reports: int
+    pending_reports: int
+
+class MunicipalityStatusActivityResponse(BaseModel):
+    id: uuid.UUID
+    complaint_id: uuid.UUID
+    status: str
+    remarks: Optional[str] = None
+    changed_by: Optional[uuid.UUID] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class MunicipalityDashboardResponse(BaseModel):
+    overview: MunicipalityDashboardOverview
+    recent_complaints: List[ComplaintResponse]
+    recent_activity: List[MunicipalityStatusActivityResponse]

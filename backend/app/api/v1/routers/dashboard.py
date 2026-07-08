@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.models.complaint_category import ComplaintCategory
-from app.schemas.dashboard import ConfigResponse, CategoryResponse, FeatureFlagsResponse, DashboardResponse
+from app.schemas.dashboard import ConfigResponse, CategoryResponse, FeatureFlagsResponse, DashboardResponse, MunicipalityDashboardResponse
 from app.utils.response import standard_response, StandardResponseModel
 from app.core.config import settings
 from app.schemas.profile import SUPPORTED_LANGUAGES, SUPPORTED_THEMES
@@ -24,12 +24,16 @@ def get_dashboard(
     """
     data = dashboard_service.get_dashboard_data(
         db=db,
-        user_id=current_user.id,
+        current_user=current_user,
         latitude=latitude,
         longitude=longitude
     )
-    # Parse data into DashboardResponse structure
-    dashboard_data = DashboardResponse.model_validate(data)
+    from app.constants.enums import UserRole
+    if current_user.role == UserRole.CITIZEN.value:
+        dashboard_data = DashboardResponse.model_validate(data)
+    else:
+        dashboard_data = MunicipalityDashboardResponse.model_validate(data)
+        
     return standard_response(
         success=True,
         message="Dashboard overview data retrieved successfully",

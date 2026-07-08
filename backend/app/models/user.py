@@ -16,6 +16,7 @@ class User(Base):
     profile_picture: Mapped[str] = mapped_column(String(1024), nullable=True)
     role: Mapped[str] = mapped_column(String(50), default=UserRole.CITIZEN.value, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    municipality_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("municipalities.id"), nullable=True, index=True)
     
     # Soft delete fields
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -46,3 +47,4 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    municipality: Mapped[Optional["Municipality"]] = relationship("Municipality")

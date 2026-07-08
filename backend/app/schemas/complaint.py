@@ -69,14 +69,47 @@ class ComplaintCreate(BaseModel):
     longitude: float = Field(..., ge=-180.0, le=180.0)
     municipality_id: Optional[uuid.UUID] = None
 
-class ComplaintUpdate(BaseModel):
+class ComplaintCitizenUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=5, max_length=500)
     description: Optional[str] = Field(None, min_length=20)
     category_id: Optional[uuid.UUID] = None
     location_name: Optional[str] = Field(None, max_length=500)
     latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
     longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
-    municipality_id: Optional[uuid.UUID] = None
+
+class ComplaintResolveRequest(BaseModel):
+    summary: str
+    department: str
+    officer_name: str
+    actions: str
+    before_image_url: Optional[str] = None
+    after_image_url: Optional[str] = None
+    remarks: Optional[str] = None
+
+class ComplaintMunicipalityUpdate(BaseModel):
+    status: Optional[str] = None
+    severity: Optional[str] = None
+    assigned_department: Optional[str] = None
+    assigned_officer: Optional[str] = None
+    resolution: Optional[ComplaintResolveRequest] = None
+    remarks: Optional[str] = None
+
+class ComplaintUpdate(BaseModel):
+    # Citizen fields
+    title: Optional[str] = Field(None, min_length=5, max_length=500)
+    description: Optional[str] = Field(None, min_length=20)
+    category_id: Optional[uuid.UUID] = None
+    location_name: Optional[str] = Field(None, max_length=500)
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    
+    # Municipal fields
+    status: Optional[str] = None
+    severity: Optional[str] = None
+    assigned_department: Optional[str] = None
+    assigned_officer: Optional[str] = None
+    resolution: Optional[ComplaintResolveRequest] = None
+    remarks: Optional[str] = None
 
 class ComplaintResponse(BaseModel):
     id: uuid.UUID
@@ -91,6 +124,8 @@ class ComplaintResponse(BaseModel):
     latitude: float
     longitude: float
     geo_point: Optional[str] = None
+    assigned_department: Optional[str] = None
+    assigned_officer: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

@@ -114,5 +114,26 @@ class ComplaintClusterService:
         result["hotspot_radius_meters"] = radius_meters
         return result
 
+    def get_municipality_complaint_map(
+        self,
+        db: Session,
+        municipality_id: uuid.UUID,
+        radius_meters: float = HOTSPOT_RADIUS_METERS,
+    ) -> Dict[str, Any]:
+        complaints = (
+            db.query(Complaint)
+            .filter(
+                Complaint.municipality_id == municipality_id,
+                Complaint.is_deleted == False,
+                Complaint.latitude.isnot(None),
+                Complaint.longitude.isnot(None),
+            )
+            .order_by(Complaint.created_at.desc())
+            .all()
+        )
+        result = cluster_complaints(complaints, radius_meters=radius_meters)
+        result["hotspot_radius_meters"] = radius_meters
+        return result
+
 
 complaint_cluster_service = ComplaintClusterService()
