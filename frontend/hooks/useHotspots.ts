@@ -19,10 +19,11 @@ export function useHotspots() {
     setError(null);
     try {
       const data = await hotspotService.getHotspots(lat, lng, radius, severity, signal);
-      setHotspots(data);
+      setHotspots(Array.isArray(data) ? data : []);
     } catch (err: any) {
       if (err.name !== "CanceledError" && err.name !== "AbortError") {
         setError(err.message || "Failed to load hotspots.");
+        setHotspots([]);
       }
     } finally {
       setLoading(false);

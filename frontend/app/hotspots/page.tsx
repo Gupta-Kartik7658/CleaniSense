@@ -26,8 +26,8 @@ export default function HotspotsPage() {
     };
   }, [coords, fetchHotspots]);
 
-  const getSeverityStyle = (sev: string) => {
-    const s = sev.toLowerCase();
+  const getSeverityStyle = (sev?: string) => {
+    const s = (sev || "medium").toLowerCase();
     if (s === "high") {
       return "bg-rose-50 border-rose-100 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-400";
     }
@@ -104,27 +104,35 @@ export default function HotspotsPage() {
                   No hotspots detected in your surrounding ward region.
                 </p>
               ) : (
-                hotspots.map((h) => (
+                hotspots.map((h, index) => {
+                  const latitude = Number(h.latitude);
+                  const longitude = Number(h.longitude);
+                  const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+
+                  return (
                   <div
-                    key={h.id}
+                    key={h.id || `hotspot-${index}`}
                     className="p-4 bg-slate-50 dark:bg-slate-900 border border-slate-150 dark:border-slate-800 rounded-xl space-y-2 text-xs"
                   >
                     <div className="flex justify-between items-start gap-2">
                       <h4 className="font-extrabold text-slate-900 dark:text-white leading-tight">
-                        {h.title}
+                        {h.title || `Environmental Hotspot #${index + 1}`}
                       </h4>
                       <span className={`text-[9px] font-bold py-0.5 px-2 rounded-md border shrink-0 uppercase tracking-wider ${getSeverityStyle(h.severity)}`}>
-                        {h.severity}
+                        {h.severity || "medium"}
                       </span>
                     </div>
                     <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                      {h.description}
+                      {h.description || `${h.reports_count ?? 0} reports clustered in this area.`}
                     </p>
-                    <p className="text-[9px] font-mono text-slate-400 dark:text-slate-500">
-                      📍 {h.latitude.toFixed(4)}° N, {h.longitude.toFixed(4)}° E
-                    </p>
+                    {hasCoordinates && (
+                      <p className="text-[9px] font-mono text-slate-400 dark:text-slate-500">
+                        📍 {latitude.toFixed(4)}° N, {longitude.toFixed(4)}° E
+                      </p>
+                    )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
