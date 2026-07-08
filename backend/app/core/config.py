@@ -9,7 +9,11 @@ class Settings(BaseSettings):
     
     PROJECT_NAME: str = "CleaniSense"
     API_V1_STR: str = "/api/v1"
-    
+
+    # CORS — comma-separated list of allowed origins (env-driven).
+    # Dev default permits the Next.js dev server; tighten via .env for prod.
+    BACKEND_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     # Database
     DATABASE_URL: str = "sqlite:///./cleanisense.db"
     

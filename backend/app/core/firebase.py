@@ -24,21 +24,16 @@ def initialize_firebase():
                 logger.error(f"Error initializing Firebase Admin with service account: {e}")
                 raise e
         else:
-            logger.warning(f"Firebase credentials not found at {cred_path}. Falling back to standard initialization.")
-            try:
-                firebase_admin.initialize_app()
-            except Exception as e:
-                logger.error(f"Failed default Firebase initialization: {e}")
-                # Fallback to inline mock structure in dev environment to avoid crash
-                cred = credentials.Certificate({
-                    "type": "service_account",
-                    "project_id": "cleanisense-mock",
-                    "private_key_id": "mockkeyid",
-                    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC6N4S8MOCKMOCK\n-----END PRIVATE KEY-----\n",
-                    "client_email": "firebase-adminsdk-mock@cleanisense-mock.iam.gserviceaccount.com"
-                })
-                firebase_admin.initialize_app(cred)
-                logger.warning("Firebase Admin initialized using fallback mock credentials.")
+            # Credentials missing — surface a clear startup error instead of
+            # silently booting a fake identity. Auth is mandatory for this app.
+            logger.error(
+                f"Firebase credentials not found at {cred_path}. "
+                f"Set GOOGLE_APPLICATION_CREDENTIALS or place a service account JSON there."
+            )
+            raise FileNotFoundError(
+                f"Firebase service account credentials missing at {cred_path}. "
+                f"Cannot start without a valid Firebase identity."
+            )
 
 # Initialize immediately on module import
 initialize_firebase()

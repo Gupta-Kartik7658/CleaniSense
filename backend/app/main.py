@@ -36,10 +36,15 @@ app = FastAPI(
 # Logging middleware registered first to wrap everything
 app.add_middleware(LoggingMiddleware)
 
-# CORS configurations
+# CORS configurations — config-driven allowlist; never wildcard in production.
+_cors_origins = [
+    origin.strip()
+    for origin in settings.BACKEND_CORS_ORIGINS.split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Adjust for production
+    allow_origins=_cors_origins or ["http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

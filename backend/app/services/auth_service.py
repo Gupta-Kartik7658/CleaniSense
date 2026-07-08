@@ -25,7 +25,9 @@ class AuthService:
             logger.error(f"Firebase token verification failed: {e}")
             raise ValueError("Invalid or expired Firebase ID token")
 
-    def authenticate_user(self, db: Session, decoded_token: dict) -> User:
+    from typing import Optional
+
+    def authenticate_user(self, db: Session, decoded_token: dict, role: Optional[str] = None) -> User:
         """
         Find or create a user in the database based on the verified Firebase token claims.
         """
@@ -42,23 +44,26 @@ class AuthService:
         if not user:
             user = user_service.get_user_by_email(db, email)
 
+        target_role = role if role else "citizen"
+
         if user:
             # Update mutable fields on existing user (idempotent)
             update_data = UserUpdate(
                 firebase_uid=firebase_uid,
                 name=name,
                 profile_picture=picture,
+                role=role if role else user.role
             )
             user = user_service.update_user(db, user, update_data)
-            logger.info(f"Updated existing user: {email}")
+            logger.info(f"Updated existing user: {email} (role: {user.role})")
         else:
-            # First time logging in: register the user as a citizen
+            # First time logging in: register the user with requested or default role
             user_in = UserCreate(
                 firebase_uid=firebase_uid,
                 email=email,
                 name=name,
                 profile_picture=picture,
-                role="citizen",
+                role=target_role,
                 is_active=True
             )
             try:
@@ -80,3 +85,4 @@ class AuthService:
         return user
 
 auth_service = AuthService()
+

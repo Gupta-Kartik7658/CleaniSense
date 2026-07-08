@@ -22,6 +22,8 @@ class Complaint(Base):
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
     geo_point: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    assigned_department: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    assigned_officer: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     # Soft delete fields
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

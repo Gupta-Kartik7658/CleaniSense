@@ -6,7 +6,7 @@ export interface User {
   email: string;
   name: string | null;
   profile_picture: string | null;
-  role: "citizen" | "admin";
+  role: "citizen" | "admin" | "super_admin" | "municipality_admin" | "municipality_officer";
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -19,8 +19,8 @@ export interface ApiResponseEnvelope<T> {
 }
 
 export const authService = {
-  loginWithFirebase: async (idToken: string): Promise<User> => {
-    return api.post("/auth/login", { idToken });
+  loginWithFirebase: async (idToken: string, requestedRole?: string): Promise<User> => {
+    return api.post("/auth/login", { idToken, role: requestedRole });
   },
 
   getCurrentUser: async (): Promise<User> => {

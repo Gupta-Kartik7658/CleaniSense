@@ -13,7 +13,7 @@ interface AuthContextType {
   profileData: ProfileResponse | null;
   setProfileData: React.Dispatch<React.SetStateAction<ProfileResponse | null>>;
   loading: boolean;
-  login: () => Promise<void>;
+  login: (requestedRole?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   isAuthenticated: boolean;
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
-  const login = async () => {
+  const login = async (requestedRole?: string) => {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);

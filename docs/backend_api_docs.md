@@ -138,6 +138,7 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 
 #### `GET /api/v1/dashboard`
 - **Description**: Aggregates statistics, recent reports, nearby hotspots, and current user configurations in a single view query.
+  - *Note: If the logged-in user is a Municipal Officer/Admin, this endpoint returns the lightweight municipal dashboard summary instead. Refer to the dedicated [Municipal Dashboard Integration Guide](file:///c:/Users/Husain/Documents/Build%20with%20AI%20-%20Google/CleaniSense/docs/municipal_api_docs.md) for full municipal schemas.*
 - **Query Parameters**:
   - `latitude`: `float` (optional, ge=-90.0, le=90.0)
   - `longitude`: `float` (optional, ge=-180.0, le=180.0)

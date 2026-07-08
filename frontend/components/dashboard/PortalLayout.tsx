@@ -134,11 +134,11 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
             </span>
           </div>
 
-          {/* Navigation Links in Header */}
           <nav className="hidden md:flex items-center space-x-8 text-xs font-bold text-slate-500 dark:text-slate-400">
-            <Link href="/dashboard" className="hover:text-emerald-600 dark:hover:text-emerald-450 transition-colors">{tNav("dashboard")}</Link>
+            <Link href="/" className="hover:text-emerald-600 dark:hover:text-emerald-405 transition-colors">Home</Link>
+            <Link href="/dashboard" className="hover:text-emerald-600 dark:hover:text-emerald-405 transition-colors">{tNav("dashboard")}</Link>
             <Link href="/complaints/history" className="hover:text-emerald-600 dark:hover:text-emerald-455 transition-colors">{tNav("complaints")}</Link>
-            <Link href="/hotspots" className="hover:text-emerald-600 dark:hover:text-emerald-450 transition-colors">{tNav("hotspots")}</Link>
+            <Link href="/hotspots" className="hover:text-emerald-600 dark:hover:text-emerald-405 transition-colors">{tNav("hotspots")}</Link>
             <Link href="/profile" className="hover:text-emerald-600 dark:hover:text-emerald-455 transition-colors">{tNav("profile")}</Link>
           </nav>
 
@@ -299,6 +299,18 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
                       <span>⚙</span> {tCommon("accountSettings")}
                     </Link>
                   </div>
+
+                  {user.role === 'super_admin' && (
+                    <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 px-2">
+                      <Link
+                        href="/admin"
+                        onClick={() => setDropdownOpen(false)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-650 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <span>🔒</span> Admin Panel
+                      </Link>
+                    </div>
+                  )}
 
                   {/* Sign Out Button */}
                   <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 px-2">
