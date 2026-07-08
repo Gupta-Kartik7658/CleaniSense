@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PollutionService } from '@/services/pollutionService';
+import { complaintService } from '@/services/complaint';
 import { HotspotCluster, IncidentReport } from '@/types/pollution';
 import { 
   MapPin, 
@@ -36,9 +36,7 @@ export default function IncidentsMapPage() {
   const loadMapData = async () => {
     setLoading(true);
     try {
-      const hotspotData = await PollutionService.getHotspotClusters();
-      const incidentData = await PollutionService.getIncidents();
-      setIncidents(incidentData.incidents || []);
+      const mapData = await complaintService.getMapData();
       
       const defaultClusters = [
         { id: 'c1', center: { latitude: 19.076, longitude: 72.877, city: 'Mumbai', district: 'Mumbai Suburban', state: 'Maharashtra' }, radius: 250, incidentCount: 14, averageSeverity: 3.8, dominantType: 'air', trend: 'growing', createdAt: '2026-06-01', top: '35%', left: '25%' },
@@ -47,9 +45,8 @@ export default function IncidentsMapPage() {
         { id: 'c4', center: { latitude: 13.082, longitude: 80.270, city: 'Chennai', district: 'Chennai', state: 'Tamil Nadu' }, radius: 300, incidentCount: 12, averageSeverity: 3.2, dominantType: 'water', trend: 'growing', createdAt: '2026-06-12', top: '50%', left: '75%' },
       ];
       
-      if (hotspotData && hotspotData.length > 0) {
-        // Map backend clusters to static grid locations
-        const mapped = hotspotData.map((c: any, index: number) => {
+      if (mapData && mapData.hotspots && mapData.hotspots.length > 0) {
+        const mapped = mapData.hotspots.map((c: any, index: number) => {
           const positions = [
             { top: '35%', left: '25%' },
             { top: '25%', left: '60%' },
@@ -57,11 +54,48 @@ export default function IncidentsMapPage() {
             { top: '50%', left: '75%' }
           ];
           const pos = positions[index % positions.length];
-          return { ...c, top: pos.top, left: pos.left };
+          return {
+            id: c.id,
+            center: {
+              latitude: c.latitude,
+              longitude: c.longitude,
+              city: `Hotspot Cluster #${index + 1}`,
+              district: `Contains ${c.count} Reports`,
+              state: `Radius: ${c.radius_meters}m`
+            },
+            radius: c.radius_meters,
+            incidentCount: c.count,
+            averageSeverity: 3.5,
+            dominantType: 'air',
+            trend: 'stable',
+            createdAt: c.created_at || new Date().toISOString(),
+            top: pos.top,
+            left: pos.left
+          };
         });
         setClustersList(mapped);
       } else {
         setClustersList(defaultClusters);
+      }
+
+      // Load incident points if returned by singles
+      if (mapData && mapData.singles) {
+        const mappedIncidents = mapData.singles.map((s: any) => ({
+          id: s.id,
+          description: s.title,
+          severity: 'medium' as const,
+          status: s.status as any,
+          type: s.category_name?.toLowerCase() || 'general',
+          reportedAt: new Date().toISOString(),
+          userName: 'Anonymous Citizen',
+          userEmail: 'N/A',
+          location: {
+            latitude: s.latitude,
+            longitude: s.longitude,
+            address: s.location_name
+          }
+        }));
+        setIncidents(mappedIncidents);
       }
     } catch (e) {
       console.error('Error loading map details:', e);
@@ -71,35 +105,8 @@ export default function IncidentsMapPage() {
   };
 
   const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Only allow click if we did not hit a pin
-    if ((e.target as HTMLElement).closest('.absolute.cursor-pointer.group')) return;
-    
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    
-    const newClusterId = `c-${Date.now()}`;
-    const newCluster = {
-      id: newClusterId,
-      center: {
-        latitude: 19.076 + (y - 50) * -0.001,
-        longitude: 72.877 + (x - 50) * 0.001,
-        city: `Sector Pin ${Math.floor(x)}`,
-        district: `Sub-District ${Math.floor(y)}`,
-        state: 'Telemetry Verified'
-      },
-      radius: Math.floor(100 + Math.random() * 200),
-      incidentCount: Math.floor(1 + Math.random() * 5),
-      averageSeverity: parseFloat((2 + Math.random() * 3).toFixed(1)),
-      dominantType: ['air', 'land', 'water', 'noise'][Math.floor(Math.random() * 4)],
-      trend: ['growing', 'stable', 'shrinking'][Math.floor(Math.random() * 3)],
-      createdAt: new Date().toISOString().split('T')[0],
-      top: `${y}%`,
-      left: `${x}%`
-    };
-    
-    setClustersList(prev => [...prev, newCluster]);
-    setSelectedCluster(newCluster);
+    // Read-only canvas. Hotspot creation is not available in the current backend.
+    return;
   };
 
   const getDominantIcon = (type: string) => {

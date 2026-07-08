@@ -1,7 +1,8 @@
 // app/admin/media/page.tsx
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { complaintService } from '@/services/complaint';
 import {
   Image,
   Video,
@@ -27,7 +28,8 @@ import {
   Flag,
   CheckCircle2,
   XCircle,
-  Calendar
+  Calendar,
+  RefreshCw
 } from 'lucide-react';
 
 export default function MediaPage() {
@@ -36,61 +38,84 @@ export default function MediaPage() {
   const [previewMedia, setPreviewMedia] = useState<any>(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
   
   // Custom multi-filter states
   const [selectedSize, setSelectedSize] = useState('all');
   const [selectedLength, setSelectedLength] = useState('all');
   const [selectedDate, setSelectedDate] = useState('all');
 
-  const today = new Date();
-  const getPastDate = (daysAgo: number) => {
-    const d = new Date();
-    d.setDate(today.getDate() - daysAgo);
-    return d.toISOString();
-  };
+  const [mediaList, setMediaList] = useState<any[]>([]);
 
-  const [mediaList, setMediaList] = useState<any[]>([
-    { id: '1', type: 'image', url: 'https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1611273426858-450d8e3c9fce?auto=format&fit=crop&q=80&w=400', name: 'Industrial Smoke Emission', location: 'Mumbai', user: 'Rajesh K.', uploadTimestamp: getPastDate(0), date: 'Today', severity: 'critical', status: 'pending', sizeInBytes: 850000, sizeLabel: '830 KB', durationInSeconds: null, durationLabel: null },
-    { id: '2', type: 'video', url: 'https://assets.mixkit.co/videos/preview/mixkit-environmental-pollution-of-a-factory-chimney-42247-large.mp4', thumbnail: 'https://images.unsplash.com/photo-1526470608268-f674ce90ebd4?auto=format&fit=crop&q=80&w=400', name: 'Illegal Garbage Dumping', location: 'Delhi', user: 'Priya S.', uploadTimestamp: getPastDate(1), date: 'Yesterday', severity: 'high', status: 'pending', sizeInBytes: 4500000, sizeLabel: '4.3 MB', durationInSeconds: 12, durationLabel: '0:12' },
-    { id: '3', type: 'image', url: 'https://images.unsplash.com/photo-1590001155093-a3c66ab0c3ff?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1590001155093-a3c66ab0c3ff?auto=format&fit=crop&q=80&w=400', name: 'Chemical River Contamination', location: 'Bangalore', user: 'Amit P.', uploadTimestamp: getPastDate(2), date: '2 days ago', severity: 'critical', status: 'pending', sizeInBytes: 7200000, sizeLabel: '6.8 MB', durationInSeconds: null, durationLabel: null },
-    { id: '4', type: 'image', url: 'https://images.unsplash.com/photo-1532601224476-15c79f2f7a51?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1532601224476-15c79f2f7a51?auto=format&fit=crop&q=80&w=400', name: 'Construction Site Dust', location: 'Chennai', user: 'Sneha G.', uploadTimestamp: getPastDate(6), date: '6 days ago', severity: 'low', status: 'approved', sizeInBytes: 2400000, sizeLabel: '2.3 MB', durationInSeconds: null, durationLabel: null },
-    { id: '5', type: 'video', url: 'https://assets.mixkit.co/videos/preview/mixkit-thick-smoke-coming-out-of-factory-chimneys-42245-large.mp4', thumbnail: 'https://images.unsplash.com/photo-1608686207856-001b95cf60ca?auto=format&fit=crop&q=80&w=400', name: 'Exhaust Vehicle Emission', location: 'Hyderabad', user: 'Vikram S.', uploadTimestamp: getPastDate(12), date: '12 days ago', severity: 'high', status: 'pending', sizeInBytes: 9000000, sizeLabel: '8.6 MB', durationInSeconds: 90, durationLabel: '1:30' },
-    { id: '6', type: 'image', url: 'https://images.unsplash.com/photo-1569163139599-0f4cd377d0e2?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1569163139599-0f4cd377d0e2?auto=format&fit=crop&q=80&w=400', name: 'Plastic Waste Overflow', location: 'Pune', user: 'Meera R.', uploadTimestamp: getPastDate(15), date: '15 days ago', severity: 'high', status: 'flagged', sizeInBytes: 1500000, sizeLabel: '1.4 MB', durationInSeconds: null, durationLabel: null },
-    { id: '7', type: 'image', url: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1618477388954-7852f32655ec?auto=format&fit=crop&q=80&w=400', name: 'Open Toxic Burning', location: 'Delhi', user: 'Deepa V.', uploadTimestamp: getPastDate(20), date: '20 days ago', severity: 'critical', status: 'approved', sizeInBytes: 3100000, sizeLabel: '2.9 MB', durationInSeconds: null, durationLabel: null },
-    { id: '8', type: 'image', url: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=400', name: 'Commercial AC Noise Dust', location: 'Mumbai', user: 'Arun N.', uploadTimestamp: getPastDate(25), date: '25 days ago', severity: 'medium', status: 'approved', sizeInBytes: 6000000, sizeLabel: '5.7 MB', durationInSeconds: null, durationLabel: null },
-    { id: '9', type: 'image', url: 'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&q=80&w=400', name: 'E-Waste Accumulation', location: 'Bangalore', user: 'Karan J.', uploadTimestamp: getPastDate(28), date: '28 days ago', severity: 'medium', status: 'pending', sizeInBytes: 1100000, sizeLabel: '1.0 MB', durationInSeconds: null, durationLabel: null },
-    { id: '10', type: 'image', url: 'https://images.unsplash.com/photo-1574689049868-e94ed5301745?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1574689049868-e94ed5301745?auto=format&fit=crop&q=80&w=400', name: 'Sewer Overflow In Market', location: 'Kolkata', user: 'Sanjay M.', uploadTimestamp: getPastDate(35), date: '35 days ago', severity: 'high', status: 'pending', sizeInBytes: 5200000, sizeLabel: '4.9 MB', durationInSeconds: null, durationLabel: null },
-    { id: '11', type: 'image', url: 'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&q=80&w=400', name: 'Medical Waste Containers', location: 'Pune', user: 'Sunita D.', uploadTimestamp: getPastDate(45), date: '45 days ago', severity: 'critical', status: 'pending', sizeInBytes: 800000, sizeLabel: '780 KB', durationInSeconds: null, durationLabel: null },
-    { id: '12', type: 'image', url: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=800', thumbnail: 'https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&q=80&w=400', name: 'Landfill Pollution Spillage', location: 'Ahmedabad', user: 'Rahul P.', uploadTimestamp: getPastDate(60), date: '2 months ago', severity: 'high', status: 'approved', sizeInBytes: 2900000, sizeLabel: '2.7 MB', durationInSeconds: null, durationLabel: null },
-  ]);
+  useEffect(() => {
+    loadMediaData();
+  }, []);
+
+  const loadMediaData = async () => {
+    setLoading(true);
+    try {
+      const response = await complaintService.getComplaints({ page_size: 50 });
+      const items = response.items || [];
+      
+      // Concurrently load details to unpack attachments
+      const details = await Promise.all(
+        items.map(async (item: any) => {
+          try {
+            return await complaintService.getComplaintDetail(item.id);
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      const attachmentsList: any[] = [];
+      details.forEach((detail: any) => {
+        if (detail && detail.attachments) {
+          detail.attachments.forEach((att: any) => {
+            attachmentsList.push({
+              id: att.id,
+              complaintId: detail.id,
+              type: att.file_type.startsWith('video') ? 'video' : 'image',
+              url: att.public_url,
+              thumbnail: att.public_url,
+              name: att.file_name || detail.title || 'Attachment',
+              location: detail.location_name || 'Verified Coordinate',
+              user: 'Citizen Reporter',
+              uploadTimestamp: detail.created_at || new Date().toISOString(),
+              date: new Date(detail.created_at).toLocaleDateString(),
+              severity: detail.severity?.toLowerCase() || 'medium',
+              status: detail.status || 'submitted',
+              sizeInBytes: att.file_size_bytes || 800000,
+              sizeLabel: `${Math.round((att.file_size_bytes || 800000) / 1024)} KB`,
+              durationInSeconds: null,
+              durationLabel: null
+            });
+          });
+        }
+      });
+      setMediaList(attachmentsList);
+    } catch (e) {
+      console.error('Failed to load media:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const stats = [
     { label: 'Total Media', value: mediaList.length, icon: Image, color: 'text-blue-500', bg: 'from-blue-500/10 to-blue-600/10' },
-    { label: 'Pending Review', value: mediaList.filter(m => m.status === 'pending').length, icon: Clock, color: 'text-yellow-500', bg: 'from-yellow-500/10 to-yellow-600/10' },
-    { label: 'Flagged Logs', value: mediaList.filter(m => m.status === 'flagged').length, icon: Flag, color: 'text-red-500', bg: 'from-red-500/10 to-red-600/10' },
-    { label: 'Approved Media', value: mediaList.filter(m => m.status === 'approved').length, icon: Check, color: 'text-emerald-555', bg: 'from-green-500/10 to-green-600/10' },
+    { label: 'Pending Review', value: mediaList.filter(m => m.status === 'submitted' || m.status === 'in_progress').length, icon: Clock, color: 'text-yellow-500', bg: 'from-yellow-500/10 to-yellow-600/10' },
+    { label: 'Flagged Logs', value: mediaList.filter(m => m.status === 'rejected').length, icon: Flag, color: 'text-red-500', bg: 'from-red-500/10 to-red-600/10' },
+    { label: 'Approved Media', value: mediaList.filter(m => m.status === 'resolved').length, icon: Check, color: 'text-emerald-555', bg: 'from-green-500/10 to-green-600/10' },
   ];
 
   const handleBulkAction = (action: 'approve' | 'flag' | 'delete') => {
-    if (selectedMedia.length === 0) return;
-    if (action === 'delete') {
-      setMediaList(prev => prev.filter(m => !selectedMedia.includes(m.id)));
-    } else {
-      setMediaList(prev => prev.map(m => selectedMedia.includes(m.id) ? { ...m, status: action === 'approve' ? 'approved' : 'flagged' } : m));
-    }
-    setSelectedMedia([]);
+    // Moderation action is unavailable in backend. Disable mock update.
+    alert('Moderation actions (Approve, Flag, Delete attachment) are unavailable in the current backend API.');
   };
 
   const handleSingleAction = (id: string, action: 'approve' | 'flag' | 'delete') => {
-    if (action === 'delete') {
-      setMediaList(prev => prev.filter(m => m.id !== id));
-      if (previewMedia?.id === id) setPreviewMedia(null);
-    } else {
-      setMediaList(prev => prev.map(m => m.id === id ? { ...m, status: action === 'approve' ? 'approved' : 'flagged' } : m));
-      if (previewMedia?.id === id) {
-        setPreviewMedia((prev: any) => ({ ...prev, status: action === 'approve' ? 'approved' : 'flagged' }));
-      }
-    }
+    // Moderation action is unavailable in backend. Disable mock update.
+    alert('Moderation actions are not supported by the current backend.');
   };
 
   const getSeverityColor = (severity: string) => {
@@ -104,9 +129,9 @@ export default function MediaPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved': return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-250';
-      case 'pending': return 'bg-amber-50 dark:bg-amber-955/20 text-amber-750 dark:text-amber-400 border-amber-250';
-      case 'flagged': return 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-205';
+      case 'resolved': return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-250';
+      case 'submitted': return 'bg-amber-50 dark:bg-amber-955/20 text-amber-750 dark:text-amber-400 border-amber-250';
+      case 'rejected': return 'bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-205';
       default: return 'bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-205';
     }
   };
@@ -329,7 +354,12 @@ export default function MediaPage() {
       )}
 
       {/* Scrollable Long List Content Visual Representation */}
-      {processedMedia.length === 0 ? (
+      {loading ? (
+        <div className="py-16 text-center border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg">
+          <RefreshCw className="mx-auto h-8 w-8 text-zinc-400 mb-2 animate-spin" />
+          <p className="text-sm font-bold dark:text-zinc-400 dark:text-zinc-300">Fetching dynamic attachment files from complaints database...</p>
+        </div>
+      ) : processedMedia.length === 0 ? (
         <div className="py-16 text-center border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 rounded-lg">
           <AlertTriangle className="mx-auto h-8 w-8 text-zinc-400 mb-2 animate-pulse" />
           <p className="text-sm font-bold dark:text-zinc-400 dark:text-zinc-300">No media fits active multi-filter values.</p>

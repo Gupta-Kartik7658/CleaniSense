@@ -3,8 +3,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { dashboardService } from '@/services/dashboard';
+import { complaintService } from '@/services/complaint';
 import { PollutionService } from '@/services/pollutionService';
-import { DashboardStats, IncidentReport } from '@/types/pollution';
+import { IncidentReport } from '@/types/pollution';
 import {
   Activity,
   AlertTriangle,
@@ -35,11 +37,12 @@ import {
 } from 'lucide-react';
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [dashboardData, setDashboardData] = useState<any>(null);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('24h');
   const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
+  const [detailedComplaint, setDetailedComplaint] = useState<any | null>(null);
   const [actionNotes, setActionNotes] = useState('');
   const [selectedOfficer, setSelectedOfficer] = useState('Rajesh Kumar');
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -51,11 +54,32 @@ export default function AdminDashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const statsData = await PollutionService.getDashboardStats();
-      setStats(statsData);
+      const data = await dashboardService.getDashboard();
+      setDashboardData(data);
 
-      const incidentData = await PollutionService.getIncidents({ limit: 6 });
-      setIncidents(incidentData.incidents || []);
+      const recentReports = data.recent_reports || [];
+      const mapped = recentReports.map((c: any) => ({
+        id: c.id,
+        description: c.description || c.title || 'No Description',
+        severity: (c.severity?.toLowerCase() || 'medium') as any,
+        status: (c.status?.toLowerCase() || 'submitted') as any,
+        type: c.category?.name?.toLowerCase() || 'general',
+        reportedAt: c.created_at || new Date().toISOString(),
+        userName: c.user?.name || 'Anonymous Citizen',
+        userEmail: c.user?.email || 'N/A',
+        location: {
+          latitude: c.latitude || 0,
+          longitude: c.longitude || 0,
+          address: c.location_name || 'Location Verified',
+          city: 'Mumbai',
+          district: '',
+          state: ''
+        },
+        mediaUrls: [],
+        userId: c.user_id || '',
+        updatedAt: c.updated_at || c.created_at || new Date().toISOString()
+      }));
+      setIncidents(mapped as any as IncidentReport[]);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);
     } finally {
@@ -63,12 +87,42 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleSelectIncident = async (incident: IncidentReport) => {
+    setSelectedIncident(incident);
+    setDetailedComplaint(null);
+    try {
+      const detail = await complaintService.getComplaintDetail(incident.id);
+      setDetailedComplaint(detail);
+    } catch (e) {
+      console.error('Failed to retrieve complaint detail:', e);
+    }
+  };
+
   const handleUpdateStatus = async (status: 'investigating' | 'resolved' | 'dismissed') => {
     if (!selectedIncident) return;
     setIsActionLoading(true);
     try {
-      const updated = await PollutionService.updateIncidentStatus(selectedIncident.id, status, actionNotes);
-      setSelectedIncident(updated);
+      let mappedStatus = 'in_progress';
+      if (status === 'resolved') {
+        mappedStatus = 'resolved';
+      } else if (status === 'dismissed') {
+        mappedStatus = 'dismissed';
+      } else {
+        mappedStatus = 'investigating';
+      }
+
+      await PollutionService.updateIncidentStatus(
+        selectedIncident.id,
+        mappedStatus,
+        actionNotes || undefined
+      );
+      
+      // Load details again to show fresh timeline
+      const freshDetail = await complaintService.getComplaintDetail(selectedIncident.id);
+      setDetailedComplaint(freshDetail);
+      
+      // Update selected incident state
+      setSelectedIncident(prev => prev ? { ...prev, status: mappedStatus as any } : null);
       setActionNotes('');
       loadDashboardData();
     } catch (e) {
@@ -83,8 +137,11 @@ export default function AdminDashboard() {
     setIsActionLoading(true);
     try {
       await PollutionService.assignIncident(selectedIncident.id, selectedOfficer);
-      const updated = { ...selectedIncident, assignedTo: selectedOfficer, status: 'investigating' as const };
-      setSelectedIncident(updated);
+      
+      const freshDetail = await complaintService.getComplaintDetail(selectedIncident.id);
+      setDetailedComplaint(freshDetail);
+
+      setSelectedIncident(prev => prev ? { ...prev, status: 'investigating' as any, assignedTo: selectedOfficer } : null);
       loadDashboardData();
     } catch (e) {
       console.error('Assignment error:', e);
@@ -168,17 +225,17 @@ export default function AdminDashboard() {
           {/* Quick Stats Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
             {[
-              { label: 'Cities Monitored', value: '24', icon: Building2 },
-              { label: 'AI Accuracy', value: '94.8%', icon: Target },
-              { label: 'Avg Response', value: '4.2h', icon: Clock },
-              { label: 'Logs Validated', value: '1.2K', icon: Users },
+              { label: 'Total Reports', value: dashboardData?.overview?.total_reports ?? 0, icon: Building2 },
+              { label: 'Active Issues', value: dashboardData?.overview?.active_reports ?? 0, icon: Target },
+              { label: 'Resolved Issues', value: dashboardData?.overview?.resolved_reports ?? 0, icon: Clock },
+              { label: 'Pending Action', value: dashboardData?.overview?.pending_reports ?? 0, icon: Users },
             ].map((item) => (
               <div key={item.label} className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-left">
                 <div className="flex items-center gap-2 text-zinc-400">
                   <item.icon className="h-4 w-4" />
                   <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
                 </div>
-                <div className="text-xl font-bold text-white mt-1">{item.value}</div>
+                <div className="text-xl font-bold text-white mt-1">{loading ? '...' : item.value}</div>
               </div>
             ))}
           </div>
@@ -186,13 +243,13 @@ export default function AdminDashboard() {
       </div>
 
       {/* Critical Callout */}
-      {stats && stats.criticalIncidents > 0 && (
+      {dashboardData && dashboardData.overview?.pending_reports > 0 && (
         <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg text-left flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-red-650 shrink-0 mt-0.5" />
           <div className="flex-1">
             <h4 className="text-sm font-bold text-red-950 dark:text-red-200">Immediate Review Required</h4>
             <p className="text-xs text-red-700 dark:text-red-400 mt-0.5">
-              There are {stats.criticalIncidents} active critical-severity reports currently pending municipality validation.
+              There are {dashboardData.overview.pending_reports} active pending reports currently awaiting municipality review.
             </p>
           </div>
         </div>
@@ -201,10 +258,10 @@ export default function AdminDashboard() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {[
-          { name: 'Active Incidents', value: stats?.totalIncidents ?? 14, change: '+12.5%', trend: 'up', icon: Activity },
-          { name: 'Critical Severity', value: stats?.criticalIncidents ?? 3, change: '-5.2%', trend: 'down', icon: AlertTriangle },
-          { name: 'Average AQI Level', value: stats?.averageAQI ?? 162, change: '+3.8%', trend: 'up', icon: Thermometer },
-          { name: 'Resolution Rate', value: `${stats?.resolutionRate ?? 84.8}%`, change: '+1.5%', trend: 'up', icon: CheckCircle },
+          { name: 'Total Reports', value: dashboardData?.overview?.total_reports ?? 0, icon: Activity },
+          { name: 'Active Reports', value: dashboardData?.overview?.active_reports ?? 0, icon: AlertTriangle },
+          { name: 'Resolved Reports', value: dashboardData?.overview?.resolved_reports ?? 0, icon: CheckCircle },
+          { name: 'Pending Reports', value: dashboardData?.overview?.pending_reports ?? 0, icon: Clock },
         ].map((stat) => (
           <div
             key={stat.name}
@@ -214,20 +271,10 @@ export default function AdminDashboard() {
               <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-900 dark:text-zinc-950 dark:text-white group-hover:bg-zinc-950 dark:group-hover:bg-white group-hover:text-zinc-950 dark:text-white dark:group-hover:text-zinc-950 transition-colors">
                 <stat.icon className="h-5 w-5" />
               </div>
-              <div className="flex items-center gap-1">
-                {stat.trend === 'up' ? (
-                  <TrendingUp className="h-3.5 w-3.5 text-emerald-650" />
-                ) : (
-                  <TrendingDown className="h-3.5 w-3.5 text-red-600" />
-                )}
-                <span className={`text-xs font-bold ${stat.trend === 'up' ? 'text-emerald-650' : 'text-red-650'}`}>
-                  {stat.change}
-                </span>
-              </div>
             </div>
             <div className="text-xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">{stat.name}</div>
             <div className="text-2xl font-extrabold text-zinc-950 dark:text-white mt-1">
-              {loading ? <span className="h-7 w-12 bg-zinc-100 dark:bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse inline-block" /> : stat.value}
+              {loading ? <span className="h-7 w-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse inline-block" /> : stat.value}
             </div>
           </div>
         ))}
@@ -285,7 +332,7 @@ export default function AdminDashboard() {
               incidents.map((incident) => (
                 <div
                   key={incident.id}
-                  onClick={() => setSelectedIncident(incident)}
+                  onClick={() => handleSelectIncident(incident)}
                   className="p-3 border border-zinc-150 dark:border-zinc-800 rounded-lg hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50/50 dark:hover:bg-zinc-100 dark:bg-zinc-800/40 transition-all cursor-pointer text-left"
                 >
                   <div className="flex justify-between items-start gap-2">
@@ -374,17 +421,35 @@ export default function AdminDashboard() {
               </div>
 
               {/* Media images if present */}
-              {selectedIncident.mediaUrls && selectedIncident.mediaUrls.length > 0 && (
+              {detailedComplaint?.attachments && detailedComplaint.attachments.length > 0 && (
                 <div>
                   <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Reported Media</p>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {selectedIncident.mediaUrls.map((url, i) => (
+                    {detailedComplaint.attachments.map((a: any, i: number) => (
                       <img 
-                        key={i} 
-                        src={url} 
-                        alt="Incident" 
+                        key={a.id || i} 
+                        src={a.public_url} 
+                        alt={a.file_name || "Attachment"} 
                         className="rounded-lg object-cover w-full h-32 border border-zinc-200 dark:border-zinc-800"
                       />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Timeline Log */}
+              {detailedComplaint?.timeline && detailedComplaint.timeline.length > 0 && (
+                <div className="border-t border-zinc-150 dark:border-zinc-800 pt-4">
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Workflow Timeline</p>
+                  <div className="mt-3 space-y-3">
+                    {detailedComplaint.timeline.map((evt: any) => (
+                      <div key={evt.id} className="flex gap-2 text-xs">
+                        <span className="text-zinc-400 dark:text-zinc-500 shrink-0 font-medium">{new Date(evt.created_at).toLocaleDateString()}</span>
+                        <div className="flex-1">
+                          <span className="font-bold capitalize text-zinc-800 dark:text-zinc-200">{evt.status.replace(/_/g, ' ')}</span>
+                          {evt.remarks && <p className="text-[11px] text-zinc-500 dark:text-zinc-450 mt-0.5">{evt.remarks}</p>}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

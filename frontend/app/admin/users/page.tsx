@@ -42,17 +42,6 @@ interface UserFormData {
   city: string;
 }
 
-const mockUsers: User[] = [
-  { id: '1', name: 'Rajesh Kumar', email: 'rajesh@email.com', role: 'admin', status: 'active', reportsCount: 45, joinedAt: '2024-01-15', lastActive: '2 min ago', phone: '+91 98765 43210', city: 'Mumbai' },
-  { id: '2', name: 'Priya Sharma', email: 'priya@email.com', role: 'moderator', status: 'active', reportsCount: 28, joinedAt: '2024-02-20', lastActive: '15 min ago', phone: '+91 98765 43211', city: 'Delhi' },
-  { id: '3', name: 'Amit Patel', email: 'amit@email.com', role: 'user', status: 'active', reportsCount: 12, joinedAt: '2024-03-10', lastActive: '1 hour ago', phone: '+91 98765 43212', city: 'Bangalore' },
-  { id: '4', name: 'Sneha Gupta', email: 'sneha@email.com', role: 'user', status: 'suspended', reportsCount: 3, joinedAt: '2024-04-05', lastActive: '2 days ago', phone: '+91 98765 43213', city: 'Chennai' },
-  { id: '5', name: 'Vikram Singh', email: 'vikram@email.com', role: 'user', status: 'banned', reportsCount: 0, joinedAt: '2024-05-12', lastActive: '1 week ago', phone: '+91 98765 43214', city: 'Hyderabad' },
-  { id: '6', name: 'Meera Reddy', email: 'meera@email.com', role: 'moderator', status: 'active', reportsCount: 56, joinedAt: '2024-01-05', lastActive: '5 min ago', phone: '+91 98765 43215', city: 'Pune' },
-  { id: '7', name: 'Arun Nair', email: 'arun@email.com', role: 'user', status: 'active', reportsCount: 8, joinedAt: '2024-06-18', lastActive: '30 min ago', phone: '+91 98765 43216', city: 'Kochi' },
-  { id: '8', name: 'Deepa Verma', email: 'deepa@email.com', role: 'user', status: 'active', reportsCount: 15, joinedAt: '2024-02-28', lastActive: '45 min ago', phone: '+91 98765 43217', city: 'Jaipur' },
-];
-
 export default function UsersPage() {
   const router = useRouter();
   const [usersList, setUsersList] = useState<User[]>([]);
@@ -90,14 +79,14 @@ export default function UsersPage() {
     setLoading(true);
     try {
       const response = await PollutionService.getUsers();
-      if (response && response.users && response.users.length > 0) {
+      if (response && response.users) {
         setUsersList(response.users);
       } else {
-        setUsersList(mockUsers);
+        setUsersList([]);
       }
     } catch (error) {
       console.error('Failed to load users:', error);
-      setUsersList(mockUsers);
+      setUsersList([]);
     } finally {
       setLoading(false);
     }
@@ -168,70 +157,30 @@ export default function UsersPage() {
         prev.map(u => u.id === userId ? { ...u, status: newStatus as any } : u)
       );
       showToast(`User status updated to ${newStatus}`, 'success');
-    } catch (e) {
-      // Optimistic updates fallback locally
-      setUsersList(prev =>
-        prev.map(u => u.id === userId ? { ...u, status: newStatus as any } : u)
-      );
-      showToast(`User status updated locally to ${newStatus}`, 'success');
+    } catch (e: any) {
+      console.error('Failed to update status on server:', e);
+      showToast(`Failed to update status: ${e.message || e}`, 'error');
     }
   };
 
   const handleAddUser = () => {
-    if (!formData.name || !formData.email) {
-      showToast('Please fill in all required fields', 'warning');
-      return;
-    }
-    const newUser: User = {
-      id: Date.now().toString(),
-      name: formData.name,
-      email: formData.email,
-      role: formData.role,
-      status: formData.status,
-      reportsCount: 0,
-      joinedAt: new Date().toISOString().split('T')[0],
-      lastActive: 'Just now',
-      phone: formData.phone,
-      city: formData.city
-    };
-    setUsersList(prev => [newUser, ...prev]);
-    setShowAddModal(false);
-    showToast('User created successfully', 'success');
-    setFormData({ name: '', email: '', role: 'user', status: 'active', phone: '', city: '' });
+    alert('User creation is not supported by the frozen backend contract.');
   };
 
   const handleEditUser = (user: User) => {
-    setEditingUser(user);
-    setFormData({
-      name: user.name,
-      email: user.email,
-      role: user.role as any,
-      status: user.status as any,
-      phone: user.phone || '',
-      city: user.city || ''
-    });
-    setShowEditModal(true);
+    alert('User profile edit is not supported by the frozen backend contract.');
   };
 
   const handleUpdateUser = () => {
-    if (!editingUser) return;
-    setUsersList(prev =>
-      prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u)
-    );
-    setShowEditModal(false);
-    showToast('User updated successfully', 'success');
+    alert('User update is not supported by the frozen backend contract.');
   };
 
   const handleDeleteUser = (id: string) => {
-    setDeletingUserId(id);
-    setShowDeleteConfirm(true);
+    alert('User deletion is not supported by the frozen backend contract.');
   };
 
   const confirmDelete = () => {
-    if (!deletingUserId) return;
-    setUsersList(prev => prev.filter(u => u.id !== deletingUserId));
-    setShowDeleteConfirm(false);
-    showToast('User deleted successfully', 'success');
+    return;
   };
 
   const toggleSelectUser = (id: string) => {
@@ -305,14 +254,11 @@ export default function UsersPage() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              setFormData({ name: '', email: '', role: 'user', status: 'active', phone: '', city: '' });
-              setShowAddModal(true);
-            }}
-            className="px-4 py-2.5 bg-zinc-950 dark:bg-white text-white dark:text-zinc-950 text-sm font-semibold rounded-md hover:bg-zinc-900 dark:hover:bg-zinc-100 transition-colors shadow-sm flex items-center gap-2 cursor-pointer"
+            disabled
+            className="px-4 py-2.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-550 text-sm font-semibold rounded-md cursor-not-allowed flex items-center gap-2 border border-transparent"
           >
             <UserPlus className="h-4 w-4" />
-            Add Account
+            Add Account (Unavailable)
           </button>
         </div>
       </div>
@@ -381,12 +327,6 @@ export default function UsersPage() {
               className="px-3 py-1.5 bg-amber-50 dark:bg-amber-955/20 text-amber-750 dark:text-amber-400 border border-amber-250 hover:bg-amber-100 text-xs font-bold rounded transition-colors cursor-pointer"
             >
               Suspend
-            </button>
-            <button
-              onClick={() => handleBulkAction('Delete')}
-              className="px-3 py-1.5 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border border-red-200 hover:bg-red-100 text-xs font-bold rounded transition-colors cursor-pointer"
-            >
-              Delete
             </button>
             <button
               onClick={() => setSelectedUsers([])}
@@ -522,16 +462,16 @@ export default function UsersPage() {
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleEditUser(user)}
-                          className="p-1.5 text-zinc-500 hover:text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
-                          title="Edit"
+                          disabled
+                          className="p-1.5 text-zinc-300 dark:text-zinc-750 cursor-not-allowed"
+                          title="User editing is unsupported"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteUser(user.id)}
-                          className="p-1.5 text-zinc-500 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
-                          title="Delete"
+                          disabled
+                          className="p-1.5 text-zinc-300 dark:text-zinc-750 cursor-not-allowed"
+                          title="User deletion is unsupported"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -592,14 +532,14 @@ export default function UsersPage() {
                   View Profile
                 </button>
                 <button
-                  onClick={() => handleEditUser(user)}
-                  className="px-2.5 py-1.5 text-xs font-bold dark:text-zinc-500 dark:text-zinc-300 hover:text-blue-500 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded transition-colors cursor-pointer"
+                  disabled
+                  className="px-2.5 py-1.5 text-xs font-bold text-zinc-350 dark:text-zinc-700 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded cursor-not-allowed"
                 >
-                  Edit
+                  Edit (N/A)
                 </button>
                 <button
-                  onClick={() => handleDeleteUser(user.id)}
-                  className="p-1.5 dark:text-zinc-500 dark:text-zinc-300 hover:text-red-500 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded transition-colors cursor-pointer"
+                  disabled
+                  className="p-1.5 text-zinc-350 dark:text-zinc-700 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded cursor-not-allowed"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>

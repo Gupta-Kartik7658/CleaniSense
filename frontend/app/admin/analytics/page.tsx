@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { PollutionService } from '@/services/pollutionService';
+import { complaintService } from '@/services/complaint';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -30,7 +30,7 @@ export default function AnalyticsPage() {
   const loadAnalytics = async () => {
     setLoading(true);
     try {
-      const res = await PollutionService.getAnalytics(timeframe);
+      const res = await complaintService.getAnalytics({ timeframe });
       setData(res);
     } catch (e) {
       console.error(e);
@@ -132,62 +132,55 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Average Air Quality Index</span>
-            <Wind className="h-5 w-5 text-red-500" />
+            <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Critical Severity Reports</span>
+            <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white">162 AQI</span>
-            <span className="text-xs text-red-650 font-bold flex items-center gap-0.5">
-              <TrendingUp className="h-3 w-3" />
-              +4.8%
+            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white">
+              {loading ? '...' : (data?.severity_distribution?.find((s: any) => s.label.toLowerCase() === 'critical')?.count ?? 0)}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Unhealthy for sensitive groups • Monitored daily</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Verified reports of critical scale</p>
         </div>
 
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">AI Validation Accuracy</span>
-            <Sparkles className="h-5 w-5 text-zinc-950 dark:text-white" />
+            <span className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">High Severity Reports</span>
+            <Sparkles className="h-5 w-5 text-orange-500" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white">94.8%</span>
-            <span className="text-xs text-emerald-650 font-bold flex items-center gap-0.5">
-              <TrendingUp className="h-3 w-3" />
-              +1.2%
+            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white">
+              {loading ? '...' : (data?.severity_distribution?.find((s: any) => s.label.toLowerCase() === 'high')?.count ?? 0)}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Validated over 1.2K reports in the last 30 days</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Reports flagged with high priority</p>
         </div>
 
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
-            <span className="text-xs font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider">Mean Resolution Duration</span>
-            <Clock className="h-5 w-5 text-emerald-650" />
+            <span className="text-xs font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider">Medium Severity Reports</span>
+            <Clock className="h-5 w-5 text-yellow-500" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white dark:text-white">4.2 hours</span>
-            <span className="text-xs text-emerald-650 font-bold flex items-center gap-0.5">
-              <TrendingDown className="h-3 w-3" />
-              -15.4%
+            <span className="text-4xl font-extrabold text-zinc-950 dark:text-white dark:text-white">
+              {loading ? '...' : (data?.severity_distribution?.find((s: any) => s.label.toLowerCase() === 'medium')?.count ?? 0)}
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Average response time by municipal officers</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">Reports flagged with medium priority</p>
         </div>
       </div>
 
       {/* Charts section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left">
-        {/* Weekly Pollution & Report Flow */}
+        {/* Status Distribution Flow */}
         <div className="lg:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="font-bold text-zinc-950 dark:text-white dark:text-white">Incident & Resolution Flow</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Comparison of submitted vs resolved reports over selected timeframe</p>
+              <h3 className="font-bold text-zinc-950 dark:text-white">Workflow Status Distribution</h3>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Comparison of report counts grouped by workflow lifecycle states</p>
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer shadow-sm">
-              <Download className="h-3.5 w-3.5" />
-              Export
+            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-zinc-700 dark:text-zinc-200 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer shadow-sm disabled:opacity-50" disabled>
+              Export Unavailable
             </button>
           </div>
 
@@ -198,55 +191,46 @@ export default function AnalyticsPage() {
             <div className="absolute inset-x-0 top-2/4 border-t border-zinc-100 dark:border-zinc-800/40 pointer-events-none" />
             <div className="absolute inset-x-0 top-3/4 border-t border-zinc-100 dark:border-zinc-800/40 pointer-events-none" />
 
-            {activeTrends.map((trend) => {
-              const maxVal = timeframe === 'year' ? 160 : timeframe === 'month' ? 60 : 40;
-              const complaintHeight = (trend.complaints / maxVal) * 100;
-              const resolvedHeight = (trend.resolved / maxVal) * 100;
+            {loading ? (
+              <div className="w-full text-center py-20 text-xs text-zinc-400">Loading charts...</div>
+            ) : !data?.status_distribution || data.status_distribution.length === 0 ? (
+              <div className="w-full text-center py-20 text-xs text-zinc-400">No status distributions available</div>
+            ) : (
+              (data.status_distribution as any[]).map((item: any) => {
+                const maxVal = Math.max(...(data.status_distribution as any[]).map((d: any) => d.count), 1);
+                const heightPercentage = (item.count / maxVal) * 100;
 
-              return (
-                <div key={trend.label} className="flex-1 flex flex-col items-center group relative z-10">
-                  <div className="flex gap-1.5 items-end h-48 w-full justify-center">
-                    {/* Complaints Bar */}
-                    <div 
-                      className="w-4 bg-zinc-950 dark:bg-zinc-200 rounded-t-sm transition-all duration-700 hover:bg-zinc-800 dark:hover:bg-white relative"
-                      style={{ height: `${complaintHeight}%` }}
-                    >
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 dark:border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none font-bold">
-                        Reports: {trend.complaints}
+                return (
+                  <div key={item.label} className="flex-1 flex flex-col items-center group relative z-10">
+                    <div className="flex items-end h-48 w-full justify-center">
+                      <div 
+                        className="w-6 bg-zinc-950 dark:bg-zinc-200 rounded-t-sm transition-all duration-700 hover:bg-zinc-800 dark:hover:bg-white relative"
+                        style={{ height: `${heightPercentage}%` }}
+                      >
+                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 dark:border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none font-bold">
+                          {item.count}
+                        </div>
                       </div>
                     </div>
-                    {/* Resolved Bar */}
-                    <div 
-                      className="w-4 bg-emerald-555 rounded-t-sm transition-all duration-700 hover:bg-emerald-500 relative"
-                      style={{ height: `${resolvedHeight}%` }}
-                    >
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-950 text-[10px] px-1.5 py-0.5 rounded border border-zinc-800 dark:border-zinc-200 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none font-bold">
-                        Resolved: {trend.resolved}
-                      </div>
-                    </div>
+                    <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-400 mt-2 capitalize truncate max-w-[70px]">{item.label.replace(/_/g, ' ')}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-400 mt-2">{trend.label}</span>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
 
           <div className="flex items-center justify-center gap-6 mt-4 text-xs font-semibold">
             <div className="flex items-center gap-1.5">
               <span className="h-3 w-3 bg-zinc-950 dark:bg-zinc-200 rounded-sm border border-zinc-300 dark:border-zinc-800" />
-              <span className="dark:text-zinc-500 dark:text-zinc-400">Reports Registered</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-3 w-3 bg-emerald-500 rounded-sm" />
-              <span className="dark:text-zinc-500 dark:text-zinc-400">Reports Resolved</span>
+              <span className="dark:text-zinc-500 dark:text-zinc-400">Workflow State Metrics</span>
             </div>
           </div>
         </div>
 
-        {/* Category breakdown (Donut/Pie Mock representation) */}
+        {/* Category breakdown */}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <h3 className="font-bold text-zinc-950 dark:text-white dark:text-white">Category breakdown</h3>
+            <h3 className="font-bold text-zinc-950 dark:text-white">Category breakdown</h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Proportional representation of logged issues</p>
           </div>
 
@@ -254,27 +238,42 @@ export default function AnalyticsPage() {
             <div className="relative h-44 w-44 rounded-full border-4 border-zinc-100 dark:border-zinc-850 flex items-center justify-center">
               <div className="absolute inset-1 border-8 border-zinc-950/5 dark:border-white/5 rounded-full" />
               <div className="absolute h-32 w-32 bg-zinc-50 dark:bg-zinc-950 rounded-full flex flex-col items-center justify-center border border-zinc-200 dark:border-zinc-850 shadow-inner">
-                <span className="text-3xl font-extrabold text-zinc-950 dark:text-white dark:text-white">1,079</span>
+                <span className="text-3xl font-extrabold text-zinc-950 dark:text-white">
+                  {loading ? '...' : (data?.category_distribution || []).reduce((acc: number, c: any) => acc + c.count, 0)}
+                </span>
                 <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Total Reports</span>
               </div>
             </div>
           </div>
 
-          <div className="space-y-2.5">
-            {categoryBreakdown.map((cat) => (
-              <div key={cat.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 dark:text-zinc-400 dark:text-zinc-300 font-medium">
-                    <span className={`h-2.5 w-2.5 rounded-full ${cat.color}`} />
-                    <span>{cat.name}</span>
+          <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
+            {loading ? (
+              <div className="text-center py-4 text-xs text-zinc-400">Loading categories...</div>
+            ) : !data?.category_distribution || data.category_distribution.length === 0 ? (
+              <div className="text-center py-4 text-xs text-zinc-400">No categories found</div>
+            ) : (
+              (data.category_distribution as any[]).map((cat: any, i: number) => {
+                const totalCount = (data.category_distribution as any[]).reduce((acc: number, c: any) => acc + c.count, 0) || 1;
+                const percentage = Math.round((cat.count / totalCount) * 100);
+                const colors = ['bg-red-500', 'bg-orange-500', 'bg-cyan-500', 'bg-yellow-500', 'bg-emerald-500', 'bg-blue-500'];
+                const color = colors[i % colors.length];
+
+                return (
+                  <div key={cat.label} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 dark:text-zinc-400 dark:text-zinc-300 font-medium">
+                        <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+                        <span className="capitalize">{cat.label}</span>
+                      </div>
+                      <span className="font-bold text-zinc-950 dark:text-white">{cat.count} ({percentage}%)</span>
+                    </div>
+                    <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                      <div className={`h-full ${color} rounded-full`} style={{ width: `${percentage}%` }} />
+                    </div>
                   </div>
-                  <span className="font-bold text-zinc-950 dark:text-white">{cat.count} ({cat.percentage}%)</span>
-                </div>
-                <div className="h-1.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
-                  <div className={`h-full ${cat.color} rounded-full`} style={{ width: `${cat.percentage}%` }} />
-                </div>
-              </div>
-            ))}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

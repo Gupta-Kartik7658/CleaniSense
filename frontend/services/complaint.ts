@@ -67,5 +67,13 @@ export const complaintService = {
 
   deleteComplaint(id: string, signal?: AbortSignal): Promise<{ id: string }> {
     return api.delete(`/complaints/${id}`, { signal });
+  },
+
+  getAnalytics(params?: { timeframe?: string }, signal?: AbortSignal): Promise<any> {
+    return api.get("/analytics", { params, signal });
+  },
+
+  getMapData(signal?: AbortSignal): Promise<any> {
+    return api.get("/map", { signal });
   }
 };

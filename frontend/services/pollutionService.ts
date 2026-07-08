@@ -93,7 +93,6 @@ export class PollutionService {
     }
   }
 
-  // User Management
   static async getUsers(params?: {
     role?: string;
     status?: string;
@@ -104,19 +103,8 @@ export class PollutionService {
       const response = await api.get('/admin/users', { params });
       return response as any;
     } catch (error) {
-      console.error('Error fetching users, returning fallback user list:', error);
-      // Fallback mock users to ensure functional page
-      const mockUsers: User[] = [
-        { id: '1', name: 'Rajesh Kumar', email: 'rajesh@email.com', role: 'admin', status: 'active', reportsCount: 45, joinedAt: '2024-01-15', lastActive: '2 min ago', phone: '+91 98765 43210', city: 'Mumbai' },
-        { id: '2', name: 'Priya Sharma', email: 'priya@email.com', role: 'moderator', status: 'active', reportsCount: 28, joinedAt: '2024-02-20', lastActive: '15 min ago', phone: '+91 98765 43211', city: 'Delhi' },
-        { id: '3', name: 'Amit Patel', email: 'amit@email.com', role: 'user', status: 'active', reportsCount: 12, joinedAt: '2024-03-10', lastActive: '1 hour ago', phone: '+91 98765 43212', city: 'Bangalore' },
-        { id: '4', name: 'Sneha Gupta', email: 'sneha@email.com', role: 'user', status: 'suspended', reportsCount: 3, joinedAt: '2024-04-05', lastActive: '2 days ago', phone: '+91 98765 43213', city: 'Chennai' },
-        { id: '5', name: 'Vikram Singh', email: 'vikram@email.com', role: 'user', status: 'banned', reportsCount: 0, joinedAt: '2024-05-12', lastActive: '1 week ago', phone: '+91 98765 43214', city: 'Hyderabad' },
-        { id: '6', name: 'Meera Reddy', email: 'meera@email.com', role: 'moderator', status: 'active', reportsCount: 56, joinedAt: '2024-01-05', lastActive: '5 min ago', phone: '+91 98765 43215', city: 'Pune' },
-        { id: '7', name: 'Arun Nair', email: 'arun@email.com', role: 'user', status: 'active', reportsCount: 8, joinedAt: '2024-06-18', lastActive: '30 min ago', phone: '+91 98765 43216', city: 'Kochi' },
-        { id: '8', name: 'Deepa Verma', email: 'deepa@email.com', role: 'user', status: 'active', reportsCount: 15, joinedAt: '2024-02-28', lastActive: '45 min ago', phone: '+91 98765 43217', city: 'Jaipur' },
-      ];
-      return { users: mockUsers, total: mockUsers.length };
+      console.error('Error fetching users, returning empty list:', error);
+      return { users: [], total: 0 };
     }
   }
 

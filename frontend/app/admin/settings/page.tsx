@@ -95,16 +95,9 @@ export default function SettingsPage() {
         if (data.api) setApiSettings(data.api);
         if (data.security) setSecuritySettings(data.security);
       }
-    } catch (error) {
-      console.warn('API getSettings failed. Using localStorage fallback.', error);
-      const cached = localStorage.getItem('cleanisense_system_settings');
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.general) setGeneralSettings(data.general);
-        if (data.notifications) setNotificationSettings(data.notifications);
-        if (data.api) setApiSettings(data.api);
-        if (data.security) setSecuritySettings(data.security);
-      }
+    } catch (error: any) {
+      console.error('API getSettings failed:', error);
+      alert(`Failed to load system settings from server: ${error.message || error}`);
     } finally {
       setLoading(false);
     }
@@ -122,11 +115,9 @@ export default function SettingsPage() {
       await PollutionService.saveSettings(updatedPayload);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (e) {
-      console.warn('API saveSettings failed. Storing locally.', e);
-      localStorage.setItem('cleanisense_system_settings', JSON.stringify(updatedPayload));
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (e: any) {
+      console.error('API saveSettings failed:', e);
+      alert(`Failed to save system settings on server: ${e.message || e}`);
     } finally {
       setSaving(false);
     }
@@ -142,18 +133,9 @@ export default function SettingsPage() {
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
-    } catch (e) {
-      // Offline fallback download trigger
-      const mockBackup = JSON.stringify({ generalSettings, apiSettings, securitySettings }, null, 2);
-      const blob = new Blob([mockBackup], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cleanisense_offline_backup_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error('Database backup failed:', e);
+      alert(`Database backup failed: ${e.message || e}`);
     }
   };
 
@@ -161,8 +143,9 @@ export default function SettingsPage() {
     try {
       await PollutionService.clearCache();
       alert('Application server cache cleared successfully.');
-    } catch (e) {
-      alert('Local storage preferences reset successfully.');
+    } catch (e: any) {
+      console.error('Cache clearing failed:', e);
+      alert(`Cache clearing failed: ${e.message || e}`);
     }
   };
 
