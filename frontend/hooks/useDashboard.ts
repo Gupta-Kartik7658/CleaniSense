@@ -23,7 +23,8 @@ export function useDashboard() {
       };
 
       // Map complaint item
-      const mappedReports: ReportItem[] = backendData.recent_reports.map((r: BackendComplaintItem) => ({
+      const reportsList = backendData.recent_reports || (backendData as any).recent_complaints || [];
+      const mappedReports: ReportItem[] = reportsList.map((r: any) => ({
         id: r.id,
         title: r.title,
         status: mapStatus(r.status),
@@ -38,29 +39,30 @@ export function useDashboard() {
       }));
 
       // Map hotspot item
-      const mappedHotspots: HotspotItem[] = backendData.nearby_hotspots.map((h: BackendHotspotItem) => ({
+      const hotspotsList = backendData.nearby_hotspots || [];
+      const mappedHotspots: HotspotItem[] = hotspotsList.map((h: any) => ({
         id: h.id,
         title: h.title,
         description: h.description,
         latitude: h.latitude,
         longitude: h.longitude,
         distance: "Local Area",
-        priority: h.severity.charAt(0).toUpperCase() + h.severity.slice(1),
+        priority: h.severity ? (h.severity.charAt(0).toUpperCase() + h.severity.slice(1)) : "Medium",
         reportsCount: 0
       }));
 
       // Build compatible DashboardData object
       const formattedData: DashboardData = {
         summary: [
-          { label: "Total Reports", value: backendData.overview.total_reports, change: "All time logs", statusType: "neutral" },
-          { label: "Active Reports", value: backendData.overview.active_reports, change: "Under review", statusType: "warning" },
-          { label: "Resolved Reports", value: backendData.overview.resolved_reports, change: "Successfully resolved", statusType: "success" },
-          { label: "Nearby Hotspots", value: backendData.overview.nearby_hotspots, change: "Action required", statusType: "danger" }
+          { label: "Total Reports", value: backendData.overview?.total_reports || 0, change: "All time logs", statusType: "neutral" },
+          { label: "Active Reports", value: backendData.overview?.active_reports || 0, change: "Under review", statusType: "warning" },
+          { label: "Resolved Reports", value: backendData.overview?.resolved_reports || 0, change: "Successfully resolved", statusType: "success" },
+          { label: "Nearby Hotspots", value: backendData.overview?.nearby_hotspots || 0, change: "Action required", statusType: "danger" }
         ],
         reports: mappedReports,
         hotspots: mappedHotspots,
-        complaintMap: backendData.complaint_map,
-        unreadNotifications: backendData.unread_notifications
+        complaintMap: backendData.complaint_map || { singles: [], hotspots: [], total_complaints: 0, hotspot_radius_meters: 50.0 },
+        unreadNotifications: backendData.unread_notifications || 0
       };
 
       setData(formattedData);
