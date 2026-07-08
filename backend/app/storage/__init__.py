@@ -10,6 +10,7 @@ def get_storage_client():
     elif settings.STORAGE_BACKEND == "firebase":
         from app.storage.firebase_storage import FirebaseStorage
         return FirebaseStorage()
-    else:
+    elif settings.STORAGE_BACKEND == "local":
         from app.storage.local_storage import LocalStorage
         return LocalStorage()
+    raise RuntimeError(f"Unsupported STORAGE_BACKEND: {settings.STORAGE_BACKEND}")

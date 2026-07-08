@@ -86,7 +86,12 @@ class ComplaintService:
         
         # Create timeline entry
         self._add_status_history_entry(db, complaint.id, complaint.status, "Complaint submitted", user_id)
+        from app.services.weather_service import weather_service
+        from app.services.hotspot_service import hotspot_service
+
+        weather_service.enrich_complaint(db, complaint)
         complaint = severity_service.calculate_and_apply(db, complaint)
+        hotspot_service.refresh_for_complaint(db, complaint)
         
         # Optional: trigger notification dispatch hook
         self._dispatch_notification_hook(db, complaint, "SUBMITTED")
@@ -131,11 +136,14 @@ class ComplaintService:
             analysis["ai_confidence_score"] = gemini_analysis["confidence_score"]
             analysis["gemini_analysis"] = gemini_analysis
 
-        return severity_service.calculate_and_apply(
+        complaint = severity_service.calculate_and_apply(
             db=db,
             complaint=complaint,
             image_analysis=analysis,
         )
+        from app.services.hotspot_service import hotspot_service
+        hotspot_service.refresh_for_complaint(db, complaint)
+        return complaint
 
     def get_complaint(self, db: Session, id: uuid.UUID, current_user: User) -> Complaint:
         """
@@ -248,7 +256,18 @@ class ComplaintService:
 
         data_keys = obj_in.model_dump(exclude_unset=True).keys()
         mun_fields = {"status", "severity", "assigned_department", "assigned_officer", "resolution", "remarks"}
-        cit_fields = {"title", "description", "category_id", "location_name", "latitude", "longitude"}
+        cit_fields = {
+            "title",
+            "description",
+            "category_id",
+            "location_name",
+            "latitude",
+            "longitude",
+            "area_affected_sqm",
+            "population_affected",
+            "duration_hours",
+            "survey_data",
+        }
 
         if current_user.role == UserRole.CITIZEN.value:
             # 1. Reject municipal field updates
@@ -296,7 +315,15 @@ class ComplaintService:
                 lng = update_data.get("longitude", complaint.longitude)
                 update_data["geo_point"] = f"POINT({lng} {lat})"
 
-            return complaint_repository.update(db, complaint, update_data)
+            complaint = complaint_repository.update(db, complaint, update_data)
+            from app.services.weather_service import weather_service
+            from app.services.hotspot_service import hotspot_service
+
+            if "latitude" in update_data or "longitude" in update_data:
+                weather_service.enrich_complaint(db, complaint)
+            complaint = severity_service.calculate_and_apply(db, complaint)
+            hotspot_service.refresh_for_complaint(db, complaint)
+            return complaint
 
         elif current_user.role in [UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value]:
             # 1. Reject citizen field updates

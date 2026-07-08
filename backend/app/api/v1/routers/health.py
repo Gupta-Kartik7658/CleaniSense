@@ -48,7 +48,7 @@ def health_check(db: Session = Depends(get_db)):
         "database": db_status,
         "storage": storage_status,
         "app_version": settings.APP_VERSION,
-        "environment": "development" if settings.MOCK_MODE else "production",
+        "environment": settings.ENVIRONMENT,
         "uptime_seconds": round(uptime, 2)
     }
     

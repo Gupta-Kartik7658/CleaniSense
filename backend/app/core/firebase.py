@@ -1,4 +1,5 @@
 import os
+import json
 import logging
 import firebase_admin
 from firebase_admin import credentials
@@ -8,7 +9,23 @@ logger = logging.getLogger("uvicorn")
 
 def initialize_firebase():
     if not firebase_admin._apps:
-        cred_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+        if settings.FIREBASE_SERVICE_ACCOUNT_JSON:
+            try:
+                service_account = json.loads(settings.FIREBASE_SERVICE_ACCOUNT_JSON)
+                cred = credentials.Certificate(service_account)
+                firebase_admin.initialize_app(cred)
+                logger.info("Firebase Admin SDK initialized from FIREBASE_SERVICE_ACCOUNT_JSON")
+                return
+            except Exception as e:
+                logger.error("Error initializing Firebase from FIREBASE_SERVICE_ACCOUNT_JSON: %s", e)
+                raise e
+
+        cred_path = settings.GOOGLE_APPLICATION_CREDENTIALS.strip()
+        if not cred_path:
+            raise FileNotFoundError(
+                "Firebase credentials are missing. Set FIREBASE_SERVICE_ACCOUNT_JSON "
+                "for hosted deployments, or GOOGLE_APPLICATION_CREDENTIALS for local development."
+            )
         
         # If it's a relative path, resolve it relative to the root backend workspace directory
         if not os.path.isabs(cred_path):

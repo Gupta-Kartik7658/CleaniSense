@@ -78,11 +78,17 @@ htmlcov/
 # SQLite (commonly used in local development)
 *.sqlite3
 *.db
+*.db-journal
+*.db-*
 
 # Local media uploads or large datasets
 /public/uploads/
+uploads/
+backend/uploads/
 data/
 *.log
+settings.json
+backend/app/settings.json
 
 # ==========================================
 # IDEs, Text Editors, & OS Noise
@@ -103,4 +109,5 @@ ehthumbs.db
 Thumbs.db
 backend/firebase-service-account.json
 *.json
+!backend/railway.json
 backend/firebase-service-account.json

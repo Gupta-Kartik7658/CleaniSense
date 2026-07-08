@@ -2,7 +2,7 @@ from typing import Optional, List
 import uuid
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
-from app.api.deps import get_db, get_current_user
+from app.api.deps import get_db, get_current_user, require_admin
 from app.models.user import User
 from app.schemas.hotspot import HotspotResponse
 from app.services.hotspot_service import hotspot_service
@@ -34,6 +34,27 @@ def list_hotspots(
         success=True,
         message="Hotspots retrieved successfully",
         data=hotspots_data
+    )
+
+@router.post("/refresh", response_model=StandardResponseModel, summary="Refresh Hotspot Clusters", description="Rebuilds active hotspot clusters from current unresolved complaints.")
+def refresh_hotspots(
+    municipality_id: Optional[uuid.UUID] = Query(None),
+    radius_meters: Optional[float] = Query(None, ge=50.0, le=5000.0),
+    min_complaints: Optional[int] = Query(None, ge=2, le=25),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    hotspots = hotspot_service.refresh_hotspots(
+        db=db,
+        municipality_id=municipality_id,
+        radius_meters=radius_meters,
+        min_complaints=min_complaints,
+    )
+    hotspots_data = [HotspotResponse.model_validate(h) for h in hotspots]
+    return standard_response(
+        success=True,
+        message="Hotspot clusters refreshed successfully",
+        data=hotspots_data,
     )
 
 @router.get("/{id}", response_model=StandardResponseModel, summary="Get Hotspot Details", description="Retrieves detailed attributes of a specific environmental hotspot by its unique ID.")
