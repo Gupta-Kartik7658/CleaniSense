@@ -40,6 +40,14 @@ export interface ComplaintDetailResponse {
   description: string;
   status: string;
   severity?: string;
+  severity_score?: number;
+  image_severity_score?: number;
+  ai_confidence_score?: number;
+  survey_score?: number;
+  weather_score?: number;
+  density_score?: number;
+  severity_breakdown?: string;
+  image_analysis_summary?: string;
   location_name: string;
   latitude: number;
   longitude: number;

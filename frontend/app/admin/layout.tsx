@@ -30,7 +30,7 @@ import {
   FileImage
 } from 'lucide-react';
 
-const navigation = [
+const baseNavigation = [
   { name: 'Home', href: '/', icon: Home },
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Manage Users', href: '/admin/users', icon: Users },
@@ -39,6 +39,10 @@ const navigation = [
   { name: 'Incidents Map', href: '/admin/map', icon: MapPin },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
+];
+
+const superAdminNavigation = [
+  { name: 'Role Access', href: '/admin/roles', icon: ShieldAlert },
 ];
 
 export default function AdminLayout({
@@ -320,7 +324,10 @@ export default function AdminLayout({
                                     className="p-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded text-xs flex items-center justify-between cursor-pointer"
                                   >
                                     <span className="font-bold text-zinc-900 dark:text-white truncate">{inc.title || inc.name}</span>
-                                    <span className="text-[9px] bg-red-100/10 text-red-500 px-1.5 rounded capitalize font-bold">{inc.severity}</span>
+                                    <span className="text-[9px] bg-red-100/10 text-red-500 px-1.5 rounded capitalize font-bold">
+                                      {inc.severityPercentage ?? inc.severityScore ? `${Math.round(Number(inc.severityPercentage ?? inc.severityScore))}% ` : ''}
+                                      {inc.severity}
+                                    </span>
                                   </div>
                                 ))}
                               </div>
@@ -495,7 +502,10 @@ export default function AdminLayout({
               <div className="my-4 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-zinc-450">Severity Level:</span>
-                  <span className="capitalize font-bold text-red-500">{quickSearchIncident.severity}</span>
+                  <span className="capitalize font-bold text-red-500">
+                    {quickSearchIncident.severityPercentage ?? quickSearchIncident.severityScore ? `${Math.round(Number(quickSearchIncident.severityPercentage ?? quickSearchIncident.severityScore))}% ` : ''}
+                    {quickSearchIncident.severity}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-zinc-450">Work Status:</span>
@@ -584,7 +594,9 @@ export default function AdminLayout({
                               className="p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-zinc-450 dark:hover:border-zinc-700 transition-colors cursor-pointer"
                             >
                               <p className="text-xs font-bold text-zinc-900 dark:text-white">{inc.title || inc.name}</p>
-                              <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">{inc.city} • Severity: {inc.severity} • Status: {inc.status}</p>
+                              <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">
+                                {inc.city} • Severity: {inc.severityPercentage ?? inc.severityScore ? `${Math.round(Number(inc.severityPercentage ?? inc.severityScore))}% ` : ''}{inc.severity} • Status: {inc.status}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -668,6 +680,9 @@ interface SidebarProps {
 
 function SidebarContent({ pathname, userRole, onClose, handleSignOut }: SidebarProps) {
   const roleLabel = userRole === 'super_admin' ? 'Super Admin' : userRole === 'municipality_officer' ? 'Officer' : 'Admin';
+  const navigation = userRole === 'super_admin'
+    ? [...baseNavigation, ...superAdminNavigation]
+    : baseNavigation;
 
   return (
     <>

@@ -14,6 +14,7 @@ from app.models.municipality import Municipality
 from app.repositories.complaint import complaint_repository
 from app.schemas.complaint import ComplaintCreate, ComplaintUpdate
 from app.constants.enums import ComplaintStatus, UserRole
+from app.services.severity_service import severity_service
 
 logger = logging.getLogger("uvicorn")
 
@@ -85,12 +86,56 @@ class ComplaintService:
         
         # Create timeline entry
         self._add_status_history_entry(db, complaint.id, complaint.status, "Complaint submitted", user_id)
+        complaint = severity_service.calculate_and_apply(db, complaint)
         
         # Optional: trigger notification dispatch hook
         self._dispatch_notification_hook(db, complaint, "SUBMITTED")
 
         logger.info(f"[ComplaintService] Complaint fully created — id={complaint.id} status={complaint.status}")
         return complaint
+
+    def apply_image_analysis_to_complaint(
+        self,
+        db: Session,
+        complaint: Complaint,
+        image_content: bytes,
+        content_type: str,
+    ) -> Complaint:
+        """
+        Runs category-aware CV analysis for image attachments and recalculates
+        the SRS severity score.
+        """
+        if complaint.category and "noise" in complaint.category.name.lower():
+            logger.info(
+                "[ComplaintService] Skipping image analysis for noise complaint=%s",
+                complaint.id,
+            )
+            return complaint
+
+        from app.services.pollution_image_service import pollution_image_service
+
+        category_name = complaint.category.name if complaint.category else None
+        analysis = pollution_image_service.detect_pollution(
+            image_content,
+            category_name=category_name,
+        )
+        from app.services.gemini_vision_service import gemini_vision_service
+
+        gemini_analysis = gemini_vision_service.analyze_image(
+            image_content=image_content,
+            mime_type=content_type,
+            category_name=category_name,
+            local_analysis=analysis,
+        )
+        if gemini_analysis:
+            analysis["ai_confidence_score"] = gemini_analysis["confidence_score"]
+            analysis["gemini_analysis"] = gemini_analysis
+
+        return severity_service.calculate_and_apply(
+            db=db,
+            complaint=complaint,
+            image_analysis=analysis,
+        )
 
     def get_complaint(self, db: Session, id: uuid.UUID, current_user: User) -> Complaint:
         """

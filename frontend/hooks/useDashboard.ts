@@ -31,7 +31,10 @@ export function useDashboard() {
         latitude: r.latitude,
         longitude: r.longitude,
         date: r.created_at ? r.created_at.split("T")[0] : "",
-        category: r.category ? r.category.name : "Other"
+        category: r.category ? r.category.name : "Other",
+        severity: r.severity,
+        severityScore: r.severity_score,
+        aiConfidenceScore: r.ai_confidence_score
       }));
 
       // Map hotspot item

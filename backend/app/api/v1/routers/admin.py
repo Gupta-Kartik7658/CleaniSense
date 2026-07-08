@@ -3,10 +3,12 @@ from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_admin
+from app.api.deps import get_db, require_admin, require_super_admin
+from app.constants.enums import UserRole
 from app.models.user import User as DBUser
 from app.models.complaint import Complaint as DBComplaint
 from app.models.hotspot import Hotspot as DBHotspot
@@ -15,6 +17,11 @@ from app.utils.response import standard_response, StandardResponseModel
 from app.utils.pagination import PaginatedResponseModel
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+class UserRoleUpdateRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255)
+    role: UserRole
 
 def map_db_user_to_frontend(user: DBUser, db: Session) -> dict:
     # Count complaints submitted by this user
@@ -58,13 +65,23 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
     elif db_status in ["officer_assigned", "in_progress", "inspection_completed", "municipality_accepted"]:
         frontend_status = "investigating"
 
-    # Map severity
-    db_severity = (complaint.severity or "medium").lower()
-    frontend_severity = "medium"
-    if db_severity in ["high", "critical"]:
-        frontend_severity = "high"
+    db_severity = (complaint.severity or "moderate").lower()
+    frontend_severity = db_severity
+    if db_severity == "medium":
+        frontend_severity = "moderate"
     elif db_severity == "low":
-        frontend_severity = "low"
+        frontend_severity = "normal"
+
+    severity_score = complaint.severity_score
+    if severity_score is None:
+        severity_score = {
+            "normal": 15.0,
+            "low": 25.0,
+            "moderate": 45.0,
+            "medium": 45.0,
+            "high": 68.0,
+            "critical": 88.0,
+        }.get(db_severity, 45.0)
 
     media_urls = [att.public_url for att in complaint.attachments if att.public_url]
 
@@ -75,6 +92,14 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
         "userEmail": complaint.user.email,
         "type": flow_type,
         "severity": frontend_severity,
+        "severityScore": round(float(severity_score), 2),
+        "severityPercentage": round(float(severity_score), 2),
+        "imageSeverityScore": complaint.image_severity_score,
+        "aiConfidence": complaint.ai_confidence_score,
+        "surveyScore": complaint.survey_score,
+        "weatherScore": complaint.weather_score,
+        "densityScore": complaint.density_score,
+        "severityBreakdown": complaint.severity_breakdown,
         "status": frontend_status,
         "description": complaint.description,
         "location": {
@@ -109,7 +134,10 @@ def get_admin_stats(
         DBComplaint.is_deleted == False
     ).scalar() or 0
     critical_incidents = db.query(func.count(DBComplaint.id)).filter(
-        DBComplaint.severity == "high",
+        (
+            (DBComplaint.severity == "critical")
+            | (DBComplaint.severity_score >= 75)
+        ),
         DBComplaint.status != "resolved",
         DBComplaint.is_deleted == False
     ).scalar() or 0
@@ -195,6 +223,47 @@ def update_user_status(
     return standard_response(
         success=True,
         message=f"User status updated to {new_status} successfully"
+    )
+
+@router.patch("/users/role", response_model=StandardResponseModel)
+def update_user_role_by_email(
+    payload: UserRoleUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: DBUser = Depends(require_super_admin)
+):
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A valid email address is required"
+        )
+
+    user = db.query(DBUser).filter(
+        func.lower(DBUser.email) == email,
+        DBUser.is_deleted == False
+    ).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User account not found for the provided email"
+        )
+
+    if user.id == current_user.id and payload.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Super admins cannot remove their own super admin role from this panel"
+        )
+
+    previous_role = user.role
+    user.role = payload.role.value
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    return standard_response(
+        success=True,
+        message=f"Role changed from {previous_role} to {user.role}",
+        data=map_db_user_to_frontend(user, db)
     )
 
 @router.get("/incidents", response_model=StandardResponseModel)

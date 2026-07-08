@@ -36,7 +36,7 @@ import {
 interface UserFormData {
   name: string;
   email: string;
-  role: 'admin' | 'moderator' | 'user';
+  role: 'citizen' | 'municipality_officer' | 'municipality_admin' | 'super_admin';
   status: 'active' | 'suspended' | 'banned';
   phone: string;
   city: string;
@@ -65,7 +65,7 @@ export default function UsersPage() {
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
-    role: 'user',
+    role: 'citizen',
     status: 'active',
     phone: '',
     city: ''
@@ -217,6 +217,9 @@ export default function UsersPage() {
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'admin': return 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-955/20 text-red-700 dark:text-red-400';
+      case 'super_admin': return 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400';
+      case 'municipality_admin': return 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400';
+      case 'municipality_officer': return 'border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400';
       case 'moderator': return 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-955/20 text-orange-700 dark:text-orange-400';
       default: return 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 text-zinc-700 dark:text-zinc-300';
     }
@@ -281,9 +284,10 @@ export default function UsersPage() {
           className="px-4 py-2.5 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md text-xs font-bold text-zinc-700 dark:text-zinc-300 focus:outline-none focus:border-zinc-450 shadow-sm cursor-pointer"
         >
           <option value="all">All Roles</option>
-          <option value="admin">Admin</option>
-          <option value="moderator">Moderator</option>
-          <option value="user">User</option>
+          <option value="citizen">Citizen</option>
+          <option value="municipality_officer">Municipality Officer</option>
+          <option value="municipality_admin">Municipality Admin</option>
+          <option value="super_admin">Super Admin</option>
         </select>
         <select
           value={selectedStatus}
@@ -589,9 +593,10 @@ export default function UsersPage() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                     className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-700 dark:text-zinc-300 outline-none focus:border-zinc-455"
                   >
-                    <option value="user">User</option>
-                    <option value="moderator">Moderator</option>
-                    <option value="admin">Admin</option>
+                    <option value="citizen">Citizen</option>
+                    <option value="municipality_officer">Municipality Officer</option>
+                    <option value="municipality_admin">Municipality Admin</option>
+                    <option value="super_admin">Super Admin</option>
                   </select>
                 </div>
                 <div>
@@ -684,9 +689,10 @@ export default function UsersPage() {
                     onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                     className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-705 dark:text-zinc-300 outline-none focus:border-zinc-455"
                   >
-                    <option value="user">User</option>
-                    <option value="moderator">Moderator</option>
-                    <option value="admin">Admin</option>
+                    <option value="citizen">Citizen</option>
+                    <option value="municipality_officer">Municipality Officer</option>
+                    <option value="municipality_admin">Municipality Admin</option>
+                    <option value="super_admin">Super Admin</option>
                   </select>
                 </div>
                 <div>

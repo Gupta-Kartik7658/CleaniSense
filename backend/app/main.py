@@ -16,6 +16,8 @@ logger = logging.getLogger("uvicorn")
 # Keep non-database routes available even if the local SQLite file is unhealthy.
 try:
     Base.metadata.create_all(bind=engine)
+    from app.database.schema_sync import sync_additive_schema
+    sync_additive_schema(engine)
 except Exception as exc:
     logger.warning(f"Database bootstrap skipped due to startup error: {exc}")
 

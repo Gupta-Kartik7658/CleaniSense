@@ -36,6 +36,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
 
   const statusMapped = complaintDetail ? mapStatus(complaintDetail.status) : "Pending";
   const severityMapped = complaintDetail?.severity ? complaintDetail.severity.charAt(0).toUpperCase() + complaintDetail.severity.slice(1) : "Medium";
+  const severityScore = complaintDetail?.severity_score;
 
   return (
     <PortalLayout>
@@ -97,12 +98,14 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                   </span>
                   <span
                     className={`text-xs font-extrabold px-2.5 py-1 rounded-md border ${
-                      severityMapped === "High"
+                      severityMapped === "High" || severityMapped === "Critical"
                         ? "bg-rose-50 border-rose-100 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-400"
                         : "bg-amber-50 border-amber-100 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400"
                     }`}
                   >
-                    {severityMapped} Priority
+                    {severityScore !== undefined && severityScore !== null
+                      ? `${Math.round(severityScore)}% ${severityMapped}`
+                      : `${severityMapped} Priority`}
                   </span>
                 </div>
               </div>

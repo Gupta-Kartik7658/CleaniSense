@@ -62,6 +62,14 @@ export default function AdminDashboard() {
         id: c.id,
         description: c.description || c.title || 'No Description',
         severity: (c.severity?.toLowerCase() || 'medium') as any,
+        severityScore: c.severity_score,
+        severityPercentage: c.severity_score,
+        imageSeverityScore: c.image_severity_score,
+        aiConfidence: c.ai_confidence_score,
+        surveyScore: c.survey_score,
+        weatherScore: c.weather_score,
+        densityScore: c.density_score,
+        severityBreakdown: c.severity_breakdown,
         status: (c.status?.toLowerCase() || 'submitted') as any,
         type: c.category?.name?.toLowerCase() || 'general',
         reportedAt: c.created_at || new Date().toISOString(),
@@ -164,9 +172,17 @@ export default function AdminDashboard() {
     switch (severity) {
       case 'critical': return 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400';
       case 'high': return 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400';
+      case 'moderate': return 'border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-800 dark:text-yellow-400';
       case 'medium': return 'border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-800 dark:text-yellow-400';
       default: return 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400';
     }
+  };
+
+  const formatSeverity = (incident: IncidentReport) => {
+    const score = incident.severityPercentage ?? incident.severityScore;
+    return score !== undefined && score !== null
+      ? `${Math.round(score)}% ${incident.severity}`
+      : incident.severity;
   };
 
   const getStatusBadge = (status: string) => {
@@ -338,14 +354,14 @@ export default function AdminDashboard() {
                   <div className="flex justify-between items-start gap-2">
                     <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate flex-1">{incident.description || 'No Description'}</p>
                     <span className={`text-[9px] px-1.5 py-0.5 rounded border capitalize font-semibold shrink-0 ${getSeverityBadge(incident.severity)}`}>
-                      {incident.severity}
+                      {formatSeverity(incident)}
                     </span>
                   </div>
                   
                   <div className="flex items-center justify-between mt-3 text-[10px] text-zinc-500 dark:text-zinc-400">
                     <span className="flex items-center gap-0.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" />
-                      {getTypeLabel(incident.type)}
+                  {getTypeLabel(incident.type)}
                     </span>
                     <span>{new Date(incident.reportedAt).toLocaleDateString()}</span>
                   </div>
@@ -372,6 +388,9 @@ export default function AdminDashboard() {
               <div>
                 <span className={`text-[10px] px-2 py-0.5 rounded border capitalize font-bold ${getSeverityBadge(selectedIncident.severity)}`}>
                   {selectedIncident.severity} Severity
+                  {((selectedIncident.severityPercentage ?? selectedIncident.severityScore) !== undefined) && (
+                    <span> · {Math.round((selectedIncident.severityPercentage ?? selectedIncident.severityScore) as number)}%</span>
+                  )}
                 </span>
                 <h3 className="text-base font-bold text-zinc-950 dark:text-white mt-2">Inspect Incident Log</h3>
               </div>
@@ -409,6 +428,25 @@ export default function AdminDashboard() {
                 <div>
                   <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Log Type</p>
                   <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">{getTypeLabel(selectedIncident.type)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Severity Score</p>
+                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">
+                    {((selectedIncident.severityPercentage ?? selectedIncident.severityScore) !== undefined)
+                      ? `${Math.round((selectedIncident.severityPercentage ?? selectedIncident.severityScore) as number)}%`
+                      : 'Unscored'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">AI Confidence</p>
+                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">
+                    {selectedIncident.aiConfidence !== undefined && selectedIncident.aiConfidence !== null
+                      ? `${Math.round(selectedIncident.aiConfidence)}%`
+                      : 'Not available'}
+                  </p>
                 </div>
                 <div>
                   <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Workflow Status</p>

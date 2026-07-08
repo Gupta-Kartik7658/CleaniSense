@@ -16,6 +16,7 @@ class PollutionImageAnalysisResponse(BaseModel):
     dominant_type: str
     severity_score: float
     severity_label: str
+    ai_confidence_score: float
     color_features: Dict[str, float]
     texture_features: Dict[str, float]
     detectors: Dict[str, DetectorAnalysisResponse]
@@ -27,5 +28,6 @@ class PollutionImageSummaryResponse(BaseModel):
     dominant_type: str
     severity_score: float
     severity_label: str
+    ai_confidence_score: float
     supported_pollution_types: List[str]
     image_shape: List[int]

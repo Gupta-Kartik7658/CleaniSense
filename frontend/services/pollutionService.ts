@@ -112,6 +112,11 @@ export class PollutionService {
     await api.patch(`/admin/users/${userId}/status`, { status });
   }
 
+  static async updateUserRoleByEmail(email: string, role: string): Promise<User> {
+    const response = await api.patch('/admin/users/role', { email, role });
+    return response as any;
+  }
+
   // Media Management
   static async getMediaByIncident(incidentId: string): Promise<string[]> {
     try {
