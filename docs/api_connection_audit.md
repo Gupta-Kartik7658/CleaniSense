@@ -13,6 +13,8 @@ Exposes user session, registration, and logout operations.
 | `authService.getCurrentUser` | `GET /auth/me` | `routers/auth.py` | `GET /api/v1/auth/me` | **CONNECTED** |
 | `authService.logout` | `POST /auth/logout` | `routers/auth.py` | `POST /api/v1/auth/logout` | **CONNECTED** |
 
+Password reset is handled directly by Firebase on the frontend route `/forgot-password` using `sendPasswordResetEmail`; no backend route is required.
+
 ---
 
 ## 2. Profile & Preferences (`profile.ts`)
@@ -51,7 +53,7 @@ Handles the citizen complaints database, attachments, and resolution documents.
 | `complaintService.updateComplaint` | `PUT /complaints/{id}` | `routers/complaints.py` | `PUT /api/v1/complaints/{id}` | **CONNECTED** |
 | `complaintService.deleteComplaint` | `DELETE /complaints/{id}` | `routers/complaints.py` | `DELETE /api/v1/complaints/{id}` | **CONNECTED** |
 
-- *Note*: In our V6.0 MVP, `PUT /complaints/{id}` serves as the consolidated endpoint for municipal status transitions (accepting, assigning, marking in-progress, completing inspection, and resolving) and citizen updates.
+- *Note*: In our latest implementation, complaint create/update payloads include survey fields (`area_affected_sqm`, `population_affected`, `duration_hours`, `survey_data`). Attachments trigger category-aware OpenCV/Gemini image analysis, weather enrichment, severity recalculation, and hotspot refresh.
 
 ---
 
@@ -62,6 +64,18 @@ Locates proximity-based pollution/waste hotspots.
 | :--- | :--- | :--- | :--- | :--- |
 | `hotspotService.getHotspots` | `GET /hotspots` | `routers/hotspots.py` | `GET /api/v1/hotspots` | **CONNECTED** |
 | `hotspotService.getHotspotDetail` | `GET /hotspots/{id}` | `routers/hotspots.py` | `GET /api/v1/hotspots/{id}` | **CONNECTED** |
+| Admin/API direct | `POST /hotspots/refresh` | `routers/hotspots.py` | `POST /api/v1/hotspots/refresh` | **CONNECTED** |
+
+---
+
+## 5.1 Weather & Air Quality (`weather.py`)
+Adds Open-Meteo weather/AQI connectivity.
+
+| Frontend/API Consumer | Axios Request Method & Path | Backend Router File | Backend Target Route | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| API direct | `GET /weather/current` | `routers/weather.py` | `GET /api/v1/weather/current` | **CONNECTED** |
+| API direct | `GET /weather/complaints/{id}` | `routers/weather.py` | `GET /api/v1/weather/complaints/{id}` | **CONNECTED** |
+| Admin/API direct | `POST /weather/complaints/{id}/refresh` | `routers/weather.py` | `POST /api/v1/weather/complaints/{id}/refresh` | **CONNECTED** |
 
 ---
 
@@ -100,6 +114,7 @@ Exposes stats, settings, user listings, and maps inside `frontend/app/admin/`.
 | `PollutionService.getHotspotClusters` | `GET /admin/hotspots` | `routers/admin.py` | `GET /api/v1/admin/hotspots` | **CONNECTED** |
 | `PollutionService.getUsers` | `GET /admin/users` | `routers/admin.py` | `GET /api/v1/admin/users` | **CONNECTED** |
 | `PollutionService.updateUserStatus` | `PATCH /admin/users/{id}/status`| `routers/admin.py` | `PATCH /api/v1/admin/users/{id}/status`| **CONNECTED** |
+| `PollutionService.updateUserRoleByEmail` | `PATCH /admin/users/role` | `routers/admin.py` | `PATCH /api/v1/admin/users/role` | **CONNECTED** |
 | `PollutionService.getMediaByIncident` | `GET /admin/incidents/{id}/media` | `routers/admin.py` | `GET /api/v1/admin/incidents/{id}/media` | **CONNECTED** |
 | `PollutionService.getAnalytics` | `GET /admin/analytics` | `routers/admin.py` | `GET /api/v1/admin/analytics` | **CONNECTED** |
 | `PollutionService.getSettings` | `GET /admin/settings` | `routers/admin.py` | `GET /api/v1/admin/settings` | **CONNECTED** |

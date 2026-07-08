@@ -77,6 +77,13 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 
 ---
 
+#### Frontend Password Reset
+- **Route**: `/forgot-password`
+- **Description**: Sends Firebase password reset emails from the frontend with `sendPasswordResetEmail`.
+- **Backend API**: None required; Firebase owns this flow.
+
+---
+
 ### 3.2 User Profile & Preferences
 
 #### `GET /api/v1/profile`
@@ -217,7 +224,15 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "location_name": "string",
     "latitude": 23.03,
     "longitude": 72.50,
-    "municipality_id": "uuid (optional)"
+    "municipality_id": "uuid (optional)",
+    "area_affected_sqm": 250,
+    "population_affected": 80,
+    "duration_hours": 48,
+    "survey_data": {
+      "severity": "normal | moderate | high | critical",
+      "vulnerable_people_nearby": true,
+      "active_leak_or_fire": false
+    }
   }
   ```
 - **Response Data (`data` field)**:
@@ -226,6 +241,14 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "id": "uuid",
     "title": "string",
     "status": "submitted",
+    "severity": "normal | moderate | high | critical",
+    "severity_score": 67.08,
+    "image_severity_score": 61.2,
+    "ai_confidence_score": 75.8,
+    "survey_score": 70.0,
+    "weather_score": 44.14,
+    "density_score": 25.0,
+    "severity_breakdown": "JSON string",
     "created_at": "datetime"
   }
   ```
@@ -274,6 +297,19 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "title": "string",
     "description": "string",
     "status": "submitted | resolved | ...",
+    "severity": "normal | moderate | high | critical",
+    "severity_score": 67.08,
+    "image_severity_score": 61.2,
+    "ai_confidence_score": 75.8,
+    "survey_score": 70.0,
+    "weather_score": 44.14,
+    "density_score": 25.0,
+    "severity_breakdown": "JSON string containing SRS weights and component scores",
+    "image_analysis_summary": "JSON string containing OpenCV/Gemini image summary",
+    "area_affected_sqm": 250,
+    "population_affected": 80,
+    "duration_hours": 48,
+    "survey_data": "JSON string",
     "location_name": "string",
     "latitude": 23.03,
     "longitude": 72.50,
@@ -331,6 +367,10 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "location_name": "string (optional)",
     "latitude": "float (optional)",
     "longitude": "float (optional)"
+    "area_affected_sqm": "float (optional)",
+    "population_affected": "int (optional)",
+    "duration_hours": "float (optional)",
+    "survey_data": "object (optional)"
   }
   ```
 - **Response Data (`data` field)**: Returns basic complaint response object (title, status, id, created_at).
@@ -422,26 +462,39 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 ### 3.6 Environmental Hotspots
 
 #### `GET /api/v1/hotspots`
-- **Description**: Returns a list of environmental pollution hotspots.
+- **Description**: Returns active environmental pollution hotspots generated from unresolved complaint clusters.
 - **Query Parameters**:
   - `latitude`: `float` (optional, search center)
   - `longitude`: `float` (optional, search center)
   - `radius_km`: `float` (default `5.0`, ge=0.1, le=100.0)
-  - `severity`: `high | medium | low` (optional)
+  - `severity`: `normal | moderate | high | critical` (optional)
 - **Response Data (`data` field)**:
   ```json
   [
     {
       "id": "uuid",
       "title": "string",
-      "description": "string",
       "latitude": 23.028,
       "longitude": 72.505,
-      "severity": "high",
+      "severity": "critical",
+      "severity_score": 82.5,
+      "radius_meters": 500,
+      "reports_count": 4,
+      "complaint_ids": "[\"uuid\", \"uuid\"]",
+      "dominant_category": "Air Pollution",
+      "trend": "increasing",
       "is_active": true
     }
   ]
   ```
+
+#### `POST /api/v1/hotspots/refresh`
+- **Description**: Admin-only rebuild of persisted hotspot clusters from current unresolved complaints.
+- **Query Parameters**:
+  - `municipality_id`: `uuid` (optional)
+  - `radius_meters`: `float` (optional, default from `HOTSPOT_RADIUS_METERS`)
+  - `min_complaints`: `int` (optional, default from `HOTSPOT_MIN_COMPLAINTS`)
+- **Side Effect**: Critical hotspots create deduplicated `CRITICAL_HOTSPOT` notifications for municipal staff and superadmins.
 
 #### `GET /api/v1/hotspots/{id}`
 - **Description**: Retrieves single hotspot details.
@@ -449,7 +502,74 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 
 ---
 
-### 3.7 Diagnostics Health
+### 3.7 Weather & Air Quality
+
+#### `GET /api/v1/weather/current`
+- **Description**: Fetches current weather and air-quality data for coordinates from Open-Meteo.
+- **Query Parameters**:
+  - `latitude`: `float`
+  - `longitude`: `float`
+- **Response Data (`data` field)**:
+  ```json
+  {
+    "latitude": 23.03,
+    "longitude": 72.50,
+    "temperature_c": 31.4,
+    "humidity_percent": 65,
+    "wind_speed_kmh": 8.5,
+    "wind_direction_deg": 240,
+    "rain_probability_percent": 20,
+    "precipitation_mm": 0,
+    "aqi_us": 156,
+    "pm2_5": 45.2,
+    "pm10": 110.4,
+    "no2": 28.1,
+    "so2": 9.2,
+    "co": 420,
+    "source": "open-meteo"
+  }
+  ```
+
+#### `GET /api/v1/weather/complaints/{complaint_id}`
+- **Description**: Retrieves or lazily creates the weather observation linked to a complaint.
+
+#### `POST /api/v1/weather/complaints/{complaint_id}/refresh`
+- **Description**: Admin-only refresh of the complaint weather observation and weather severity component.
+
+---
+
+### 3.8 Image Analysis & Gemini
+
+#### `POST /api/v1/image-analysis/pollution`
+- **Description**: Runs category-aware image analysis for uploaded complaint images.
+- **Query Parameters**:
+  - `category`: `string` (optional category hint)
+  - `use_gemini`: `bool` (default `true`)
+- **Supported Visual Categories**: `smoke`, `dust_haze`, `garbage_accumulation`, `water_contamination`, `wastewater_sewerage`.
+- **Configuration**:
+  - `GEMINI_API_KEY`
+  - `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite`
+  - `GEMINI_TIMEOUT_SECONDS`
+  - `GEMINI_ENABLED`
+
+---
+
+### 3.9 Superadmin Role Management
+
+#### `PATCH /api/v1/admin/users/role`
+- **Description**: Superadmin-only endpoint to change a user role by email.
+- **Request Body**:
+  ```json
+  {
+    "email": "user@example.com",
+    "role": "citizen | municipality_officer | municipality_admin | super_admin"
+  }
+  ```
+- **Response Data (`data` field)**: Updated admin user object.
+
+---
+
+### 3.10 Diagnostics Health
 
 #### `GET /api/v1/health`
 - **Description**: Public health-check connection monitoring endpoint.

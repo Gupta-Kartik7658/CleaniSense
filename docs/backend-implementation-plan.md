@@ -870,18 +870,21 @@ Citizen/Municipality
         ↓
     storage_service.py → delegates to storage backend
         ↓
-    ┌────────────────────────────────────────────┐
-    │ firebase_storage.py (STORAGE_BACKEND=firebase) │
-    │    Upload to Firebase Storage bucket            │
-    │    Return: storage_provider, storage_path, URL  │
-    ├────────────────────────────────────────────────┤
-    │ local_storage.py (STORAGE_BACKEND=local)        │
-    │    Save to backend/uploads/                     │
-    │    Return: storage_provider, storage_path, URL  │
-    └────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────┐
+    │ supabase_storage.py (STORAGE_BACKEND=supabase)   │
+    │    Upload to Supabase Storage bucket             │
+    │    Return: storage_provider, storage_path, URL   │
+    ├──────────────────────────────────────────────────┤
+    │ firebase_storage.py (STORAGE_BACKEND=firebase)   │
+    │    Upload to Firebase Storage bucket             │
+    │    Return: storage_provider, storage_path, URL   │
+    ├──────────────────────────────────────────────────┤
+    │ local_storage.py (STORAGE_BACKEND=local)         │
+    │    Development only; disabled in production      │
+    └──────────────────────────────────────────────────┘
         ↓
     Store in complaint_attachments table:
-        storage_provider = "firebase" | "local"
+        storage_provider = "supabase" | "firebase" | "local"
         storage_path     = "complaints/uuid/filename.jpg"
         public_url       = "https://storage.googleapis.com/..."
 ```
@@ -897,7 +900,7 @@ Citizen/Municipality
 
 ### Storage Migration Safety
 
-If moving from Firebase to GCS:
+If moving between object storage providers:
 1. Update `STORAGE_BACKEND` env variable
 2. Run migration script to update `storage_provider` and `storage_path`
 3. Regenerate `public_url` from new provider
@@ -1102,7 +1105,7 @@ get_current_user() → verify ownership of complaint
     ↓
 file_validation.py → check MIME, size, format
     ↓
-storage_service.upload_file() → firebase_storage.py OR local_storage.py
+storage_service.upload_file() → supabase_storage.py OR firebase_storage.py
     ↓
 Store metadata in complaint_attachments table:
     { storage_provider, storage_path, public_url, file_type, file_size_bytes }
@@ -1117,11 +1120,19 @@ Return { success: true, data: AttachmentResponse }
 Add to `app/core/config.py`:
 
 ```python
+# Deployment
+ENVIRONMENT: str = "production"
+DATABASE_URL: str = ""                   # External PostgreSQL required in production
+FIREBASE_SERVICE_ACCOUNT_JSON: str = ""  # Preferred hosted Firebase credential
+
 # Storage
-STORAGE_BACKEND: str = "local"           # "firebase" | "local"
+STORAGE_BACKEND: str = "supabase"        # "supabase" | "firebase" | "local"
 FIREBASE_STORAGE_BUCKET: str = ""        # Firebase Storage bucket name
-UPLOAD_DIR: str = "uploads"              # Local upload directory (dev)
+UPLOAD_DIR: str = ""                     # Local upload directory (dev only)
 MAX_UPLOAD_SIZE_MB: int = 10
+SUPABASE_URL: str = ""
+SUPABASE_SERVICE_ROLE_KEY: str = ""
+SUPABASE_BUCKET: str = "complaints"
 
 # Pagination
 DEFAULT_PAGE_SIZE: int = 20
@@ -1249,3 +1260,51 @@ Reserve: `models/audit_log.py`, `services/audit_service.py`
 - **Google Cloud Storage**: Migration path via `storage_provider` field
 - **Municipality dashboard**: Municipality-scoped views and analytics
 - **Mobile API**: Optimized endpoints for bandwidth-constrained mobile clients
+
+---
+
+## 24. Current Implementation Addendum — 2026-07-08
+
+This document started as an implementation plan. The following items now reflect implemented code.
+
+### Implemented Since Original Plan
+
+- `models/weather_observation.py`: stores complaint-linked weather and air-quality observations.
+- `services/weather_service.py`: fetches Open-Meteo weather forecast and air-quality data.
+- `routers/weather.py`: exposes current coordinate weather/AQI and complaint weather refresh/read endpoints.
+- `services/severity_service.py`: calculates the SRS weighted score using image, Gemini confidence, survey, weather, and density components.
+- `services/hotspot_service.py`: generates persisted hotspot clusters from unresolved complaints and notifies municipal authorities for critical clusters.
+- `routers/hotspots.py`: includes admin-only `POST /hotspots/refresh`.
+- `routers/admin.py`: includes superadmin role changes by email and returns severity percentages/component data for incidents.
+- Frontend complaint form now sends survey inputs used by severity scoring.
+- Frontend reset-password page uses Firebase `sendPasswordResetEmail`.
+
+### Environment Variables
+
+```env
+GEMINI_API_KEY=""
+GEMINI_MODEL="gemini-3.1-flash-lite"
+GEMINI_TIMEOUT_SECONDS=4
+GEMINI_ENABLED=true
+
+WEATHER_PROVIDER="open-meteo"
+OPEN_METEO_FORECAST_URL="https://api.open-meteo.com/v1/forecast"
+OPEN_METEO_AIR_QUALITY_URL="https://air-quality-api.open-meteo.com/v1/air-quality"
+WEATHER_TIMEOUT_SECONDS=4
+
+HOTSPOT_RADIUS_METERS=500
+HOTSPOT_MIN_COMPLAINTS=2
+```
+
+### Updated Module Status
+
+| SRS Module | Current Status |
+|---|---|
+| Authentication | Implemented with Firebase login/logout/me and frontend reset-password page |
+| Complaint Management | Implemented with CRUD, attachments, survey fields, history, and details |
+| Image Analysis Engine | Implemented with OpenCV-first analysis and optional Gemini verification |
+| Weather Service | Implemented using Open-Meteo weather and air-quality APIs |
+| Severity Calculator | Implemented and persisted on complaints |
+| Hotspot Detection | Implemented with persisted complaint clusters and critical notifications |
+| Prediction Engine | Deferred intentionally |
+| Dashboard | Implemented for citizen/admin/municipal views, with prediction widgets still stubbed |

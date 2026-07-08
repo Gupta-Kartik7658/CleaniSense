@@ -68,6 +68,10 @@ class ComplaintCreate(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0)
     longitude: float = Field(..., ge=-180.0, le=180.0)
     municipality_id: Optional[uuid.UUID] = None
+    area_affected_sqm: Optional[float] = Field(None, ge=0)
+    population_affected: Optional[int] = Field(None, ge=0)
+    duration_hours: Optional[float] = Field(None, ge=0)
+    survey_data: Optional[dict] = None
 
 class ComplaintCitizenUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=5, max_length=500)
@@ -76,6 +80,10 @@ class ComplaintCitizenUpdate(BaseModel):
     location_name: Optional[str] = Field(None, max_length=500)
     latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
     longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    area_affected_sqm: Optional[float] = Field(None, ge=0)
+    population_affected: Optional[int] = Field(None, ge=0)
+    duration_hours: Optional[float] = Field(None, ge=0)
+    survey_data: Optional[dict] = None
 
 class ComplaintResolveRequest(BaseModel):
     summary: str
@@ -102,6 +110,10 @@ class ComplaintUpdate(BaseModel):
     location_name: Optional[str] = Field(None, max_length=500)
     latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
     longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    area_affected_sqm: Optional[float] = Field(None, ge=0)
+    population_affected: Optional[int] = Field(None, ge=0)
+    duration_hours: Optional[float] = Field(None, ge=0)
+    survey_data: Optional[dict] = None
     
     # Municipal fields
     status: Optional[str] = None
@@ -128,6 +140,10 @@ class ComplaintResponse(BaseModel):
     density_score: Optional[float] = None
     severity_breakdown: Optional[str] = None
     image_analysis_summary: Optional[str] = None
+    area_affected_sqm: Optional[float] = None
+    population_affected: Optional[float] = None
+    duration_hours: Optional[float] = None
+    survey_data: Optional[str] = None
     location_name: str
     latitude: float
     longitude: float

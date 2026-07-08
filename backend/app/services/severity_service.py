@@ -25,7 +25,7 @@ class SeverityService:
         image_score = self._image_score(complaint, image_analysis)
         ai_score = self._ai_score(complaint, image_analysis)
         survey_score = self._survey_score(complaint)
-        weather_score = self._weather_score(complaint)
+        weather_score = self._weather_score(db, complaint)
         density_score = self._density_score(db, complaint)
 
         severity_score = round(
@@ -106,7 +106,38 @@ class SeverityService:
 
     def _survey_score(self, complaint: Complaint) -> float:
         text = f"{complaint.title} {complaint.description}".lower()
-        score = 20.0
+        score = 10.0
+
+        if complaint.area_affected_sqm is not None:
+            score += min(float(complaint.area_affected_sqm) / 10.0, 25.0)
+        if complaint.population_affected is not None:
+            score += min(float(complaint.population_affected) / 4.0, 25.0)
+        if complaint.duration_hours is not None:
+            score += min(float(complaint.duration_hours) / 2.0, 20.0)
+
+        survey_payload: Dict[str, Any] = {}
+        if complaint.survey_data:
+            try:
+                parsed = json.loads(complaint.survey_data)
+                if isinstance(parsed, dict):
+                    survey_payload = parsed
+            except json.JSONDecodeError:
+                survey_payload = {}
+
+        severity_hint = str(survey_payload.get("severity") or "").lower()
+        if severity_hint in {"critical", "severe"}:
+            score += 25.0
+        elif severity_hint == "high":
+            score += 18.0
+        elif severity_hint in {"moderate", "medium"}:
+            score += 10.0
+        elif severity_hint in {"normal", "low"}:
+            score += 4.0
+
+        if survey_payload.get("vulnerable_people_nearby"):
+            score += 10.0
+        if survey_payload.get("active_leak_or_fire"):
+            score += 15.0
 
         severity_keywords = {
             "critical": 28,
@@ -154,7 +185,13 @@ class SeverityService:
 
         return self._clip(score)
 
-    def _weather_score(self, complaint: Complaint) -> float:
+    def _weather_score(self, db: Session, complaint: Complaint) -> float:
+        from app.services.weather_service import weather_service
+
+        observation = weather_service.get_for_complaint(db, complaint.id)
+        if observation:
+            return weather_service.score_observation(observation, complaint)
+
         text = f"{complaint.title} {complaint.description}".lower()
         category = complaint.category.name.lower() if complaint.category else ""
         score = 45.0

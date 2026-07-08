@@ -1,0 +1,59 @@
+services:
+  - type: web
+    name: cleanisense-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/v1/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PROJECT_NAME
+        value: CleaniSense
+      - key: API_V1_STR
+        value: /api/v1
+      - key: BACKEND_CORS_ORIGINS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
+      - key: GOOGLE_APPLICATION_CREDENTIALS
+        value: ""
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.1-flash-lite
+      - key: GEMINI_TIMEOUT_SECONDS
+        value: "4"
+      - key: GEMINI_ENABLED
+        value: "true"
+      - key: WEATHER_PROVIDER
+        value: open-meteo
+      - key: OPEN_METEO_FORECAST_URL
+        value: https://api.open-meteo.com/v1/forecast
+      - key: OPEN_METEO_AIR_QUALITY_URL
+        value: https://air-quality-api.open-meteo.com/v1/air-quality
+      - key: WEATHER_TIMEOUT_SECONDS
+        value: "4"
+      - key: HOTSPOT_RADIUS_METERS
+        value: "500"
+      - key: HOTSPOT_MIN_COMPLAINTS
+        value: "2"
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: complaints
+      - key: FIREBASE_STORAGE_BUCKET
+        value: ""
+      - key: UPLOAD_DIR
+        value: ""
+      - key: MAX_UPLOAD_SIZE_MB
+        value: "10"

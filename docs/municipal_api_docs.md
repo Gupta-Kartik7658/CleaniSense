@@ -4,6 +4,19 @@ This document provides a comprehensive integration guide for frontend developers
 
 ---
 
+## 2026-07-08 Module Update
+
+Municipal dashboards now consume generated severity and hotspot data:
+
+- Complaint responses expose `severity_score`, `image_severity_score`, `ai_confidence_score`, `survey_score`, `weather_score`, `density_score`, and `severity_breakdown`.
+- Hotspots are generated from unresolved complaint clusters and persisted in the `hotspots` table.
+- `POST /api/v1/hotspots/refresh` rebuilds clusters with configurable `radius_meters` and `min_complaints`.
+- Critical hotspots create deduplicated `CRITICAL_HOTSPOT` notifications for municipality staff and superadmins.
+- Weather observations can be retrieved or refreshed through `/api/v1/weather/complaints/{complaint_id}`.
+- Prediction endpoints remain demo/stub data and are intentionally deferred.
+
+---
+
 ## 1. Authentication & Tenant Context
 
 All municipal endpoints require Firebase authentication headers. The backend parses the token claims, identifies the user's role (`municipality_officer` or `municipality_admin`), and scopes database queries automatically to the user's tenant municipality (`municipality_id`).
@@ -262,4 +275,30 @@ Shifts status to `resolved` and saves resolution evidence:
     "hotspot_radius_meters": 50.0
   }
 }
+```
+
+#### Persisted Hotspots
+Use `GET /api/v1/hotspots` for persisted active hotspots. These include:
+
+```json
+{
+  "id": "uuid",
+  "title": "Air Pollution hotspot (4 reports)",
+  "latitude": 23.0305,
+  "longitude": 72.5074,
+  "severity": "critical",
+  "severity_score": 82.5,
+  "radius_meters": 500,
+  "reports_count": 4,
+  "complaint_ids": "[\"uuid\", \"uuid\"]",
+  "dominant_category": "Air Pollution",
+  "trend": "increasing",
+  "is_active": true
+}
+```
+
+Admins can force a rebuild:
+
+```http
+POST /api/v1/hotspots/refresh?radius_meters=500&min_complaints=2
 ```

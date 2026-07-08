@@ -4,6 +4,53 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-08] SRS Modules 4-6 Completion Pass, Gemini Wiring, and Admin Role Controls
+
+#### Weather & Air Quality Module
+- Added `WeatherObservation` model and `weather_observations` table registration through SQLAlchemy metadata.
+- Implemented `WeatherService` using Open-Meteo weather forecast and air-quality APIs.
+- Added weather routes:
+  - `GET /api/v1/weather/current`
+  - `GET /api/v1/weather/complaints/{complaint_id}`
+  - `POST /api/v1/weather/complaints/{complaint_id}/refresh`
+- Stored current temperature, humidity, wind speed/direction, rain probability, precipitation, US AQI, PM2.5, PM10, NO2, SO2, and CO.
+
+#### Severity Calculator
+- Extended complaints with structured survey fields: `area_affected_sqm`, `population_affected`, `duration_hours`, and `survey_data`.
+- Implemented SRS severity components:
+  - 35% image processing
+  - 20% Gemini/AI confidence
+  - 20% survey
+  - 15% weather/AQI
+  - 10% nearby complaint density
+- Persisted component scores and `severity_breakdown` JSON on each complaint.
+- Updated frontend complaint submission to capture survey inputs and display severity percentages in complaint-facing views.
+
+#### Image Analysis & Gemini
+- Wired server-side Gemini Vision verification through `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_TIMEOUT_SECONDS`, and `GEMINI_ENABLED`.
+- Default Gemini model is `gemini-3.1-flash-lite`.
+- Extended local OpenCV detection beyond air quality to smoke, dust/haze, garbage accumulation, water contamination, and wastewater/sewerage.
+- Noise complaints remain excluded from image classification.
+
+#### Hotspot Detection
+- Reworked `HotspotService` to generate persisted hotspots from unresolved complaint clusters.
+- Added configurable `HOTSPOT_RADIUS_METERS` and `HOTSPOT_MIN_COMPLAINTS`.
+- Added persisted hotspot fields: `severity_score`, `radius_meters`, `complaint_ids`, `dominant_category`, and `trend`.
+- Added `POST /api/v1/hotspots/refresh` for admin-triggered rebuilds.
+- Critical hotspots now create deduplicated `CRITICAL_HOTSPOT` notifications for municipality staff and superadmins.
+
+#### Superadmin & Auth UX
+- Added superadmin-only `PATCH /api/v1/admin/users/role` for changing a user's role by email.
+- Added `/admin/roles` page.
+- Added `/forgot-password` Firebase password reset page and login link.
+
+#### Verification
+- Backend startup import: passed.
+- Backend targeted service smoke: survey scoring, weather scoring, and hotspot clustering passed.
+- Frontend `npx tsc --noEmit`: passed after restoring the declared `lucide-react` dependency with `npm install`.
+- User-run `npm run build`: passed successfully before the final reset-password route was added; final typecheck remained clean after that route.
+- Prediction Engine remains intentionally deferred.
+
 ### [2026-07-07] Refined Municipal Dashboard MVP Backend & Validation
 
 #### Single-Endpoint PUT Refactoring

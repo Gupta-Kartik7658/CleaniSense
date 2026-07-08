@@ -1,3 +1,4 @@
+import json
 from typing import Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
@@ -29,6 +30,10 @@ class ComplaintRepository:
             latitude=obj_in.latitude,
             longitude=obj_in.longitude,
             geo_point=f"POINT({obj_in.longitude} {obj_in.latitude})",
+            area_affected_sqm=obj_in.area_affected_sqm,
+            population_affected=obj_in.population_affected,
+            duration_hours=obj_in.duration_hours,
+            survey_data=json.dumps(obj_in.survey_data) if obj_in.survey_data else None,
             is_deleted=False
         )
         db.add(db_obj)
@@ -40,7 +45,10 @@ class ComplaintRepository:
         """Update fields on a complaint."""
         for field in update_data:
             if hasattr(db_obj, field) and update_data[field] is not None:
-                setattr(db_obj, field, update_data[field])
+                value = update_data[field]
+                if field == "survey_data" and isinstance(value, dict):
+                    value = json.dumps(value)
+                setattr(db_obj, field, value)
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)

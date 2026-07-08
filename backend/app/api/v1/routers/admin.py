@@ -1,4 +1,5 @@
 # backend/app/api/v1/routers/admin.py
+import json
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
@@ -12,7 +13,10 @@ from app.constants.enums import UserRole
 from app.models.user import User as DBUser
 from app.models.complaint import Complaint as DBComplaint
 from app.models.hotspot import Hotspot as DBHotspot
+from app.models.weather_observation import WeatherObservation
+from app.models.system_setting import SystemSetting
 from app.models.complaint_category import ComplaintCategory as DBComplaintCategory
+from app.services.hotspot_service import hotspot_service
 from app.utils.response import standard_response, StandardResponseModel
 from app.utils.pagination import PaginatedResponseModel
 
@@ -145,7 +149,8 @@ def get_admin_stats(
     total_users = db.query(func.count(DBUser.id)).filter(DBUser.is_deleted == False).scalar() or 0
     active_users = db.query(func.count(DBUser.id)).filter(DBUser.is_active == True, DBUser.is_deleted == False).scalar() or 0
 
-    hotspots_count = db.query(func.count(DBHotspot.id)).scalar() or 0
+    hotspots_count = db.query(func.count(DBHotspot.id)).filter(DBHotspot.is_active == True).scalar() or 0
+    average_aqi = db.query(func.avg(WeatherObservation.aqi_us)).scalar()
 
     resolution_rate = round((resolved_incidents / total_incidents * 100), 1) if total_incidents > 0 else 100.0
 
@@ -156,7 +161,7 @@ def get_admin_stats(
         "criticalIncidents": critical_incidents,
         "totalUsers": total_users,
         "activeUsers": active_users,
-        "averageAQI": 156,
+        "averageAQI": round(float(average_aqi), 1) if average_aqi is not None else None,
         "hotspotCount": hotspots_count,
         "resolutionRate": resolution_rate,
         "averageResponseTime": 4.2
@@ -385,7 +390,8 @@ def get_admin_hotspots(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    db_hotspots = db.query(DBHotspot).all()
+    hotspot_service.refresh_hotspots(db)
+    db_hotspots = db.query(DBHotspot).filter(DBHotspot.is_active == True).all()
     hotspots_list = []
 
     for h in db_hotspots:
@@ -398,11 +404,11 @@ def get_admin_hotspots(
                 "district": "",
                 "state": ""
             },
-            "radius": 300,  # Fixed default until a radius column exists on the model
+            "radius": h.radius_meters or 0,
             "incidentCount": h.reports_count,
-            "averageSeverity": 3.5,
-            "dominantType": "air",
-            "trend": "stable",
+            "averageSeverity": h.severity_score or 0,
+            "dominantType": h.dominant_category or "Environmental",
+            "trend": h.trend or "stable",
             "createdAt": h.created_at.isoformat()
         })
         
@@ -459,67 +465,75 @@ def get_admin_analytics(
         data=analytics_data
     )
 
-import json
-import os
 from fastapi.responses import JSONResponse
 
-SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "../../../settings.json")
+SYSTEM_SETTINGS_KEY = "admin.system_settings"
+DEFAULT_SYSTEM_SETTINGS = {
+    "general": {
+        "siteName": "CleaniSense",
+        "siteDescription": "Smart City Pollution Monitoring Platform",
+        "timezone": "Asia/Kolkata",
+        "language": "en",
+        "dateFormat": "DD/MM/YYYY",
+        "maintenanceMode": False
+    },
+    "notifications": {
+        "emailAlerts": True,
+        "smsAlerts": False,
+        "pushNotifications": True,
+        "criticalOnly": False,
+        "dailyDigest": True,
+        "weeklyReport": True
+    },
+    "api": {
+        "openWeatherApiKey": "",
+        "googleMapsApiKey": "",
+        "mapboxToken": "",
+        "enableRateLimit": True,
+        "maxRequestsPerMin": 105
+    },
+    "security": {
+        "twoFactorAuth": False,
+        "sessionTimeout": 30,
+        "passwordMinLength": 8,
+        "requireSpecialChars": True,
+        "maxLoginAttempts": 5,
+        "ipWhitelisting": False
+    }
+}
 
-def load_system_settings() -> dict:
-    if not os.path.exists(SETTINGS_FILE):
-        default_settings = {
-            "general": {
-                "siteName": "CleaniSense",
-                "siteDescription": "Smart City Pollution Monitoring Platform",
-                "timezone": "Asia/Kolkata",
-                "language": "en",
-                "dateFormat": "DD/MM/YYYY",
-                "maintenanceMode": False
-            },
-            "notifications": {
-                "emailAlerts": True,
-                "smsAlerts": False,
-                "pushNotifications": True,
-                "criticalOnly": False,
-                "dailyDigest": True,
-                "weeklyReport": True
-            },
-            "api": {
-                "openWeatherApiKey": "weather_token_mock_12345",
-                "googleMapsApiKey": "maps_api_key_mock_67890",
-                "mapboxToken": "mapbox_token_mock_abcde",
-                "enableRateLimit": True,
-                "maxRequestsPerMin": 105
-            },
-            "security": {
-                "twoFactorAuth": False,
-                "sessionTimeout": 30,
-                "passwordMinLength": 8,
-                "requireSpecialChars": True,
-                "maxLoginAttempts": 5,
-                "ipWhitelisting": False
-            }
-        }
-        with open(SETTINGS_FILE, "w") as f:
-            json.dump(default_settings, f, indent=4)
-        return default_settings
+def load_system_settings(db: Session) -> dict:
+    record = db.query(SystemSetting).filter(SystemSetting.key == SYSTEM_SETTINGS_KEY).first()
+    if not record:
+        record = SystemSetting(
+            key=SYSTEM_SETTINGS_KEY,
+            value_json=json.dumps(DEFAULT_SYSTEM_SETTINGS),
+        )
+        db.add(record)
+        db.commit()
+        return DEFAULT_SYSTEM_SETTINGS
 
     try:
-        with open(SETTINGS_FILE, "r") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+        value = json.loads(record.value_json)
+        return value if isinstance(value, dict) else DEFAULT_SYSTEM_SETTINGS
+    except json.JSONDecodeError:
+        return DEFAULT_SYSTEM_SETTINGS
 
-def save_system_settings(settings: dict):
-    with open(SETTINGS_FILE, "w") as f:
-        json.dump(settings, f, indent=4)
+def save_system_settings(db: Session, settings: dict):
+    record = db.query(SystemSetting).filter(SystemSetting.key == SYSTEM_SETTINGS_KEY).first()
+    if not record:
+        record = SystemSetting(key=SYSTEM_SETTINGS_KEY, value_json=json.dumps(settings))
+    else:
+        record.value_json = json.dumps(settings)
+    db.add(record)
+    db.commit()
 
 @router.get("/settings", response_model=StandardResponseModel)
 def get_settings(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    settings = load_system_settings()
+    settings = load_system_settings(db)
     return standard_response(
         success=True,
         message="System settings retrieved",
@@ -532,7 +546,7 @@ def update_settings(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    save_system_settings(settings)
+    save_system_settings(db, settings)
     return standard_response(
         success=True,
         message="System settings updated",

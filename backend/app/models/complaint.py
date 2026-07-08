@@ -26,6 +26,10 @@ class Complaint(Base):
     density_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     severity_breakdown: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     image_analysis_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    area_affected_sqm: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    population_affected: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    duration_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    survey_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     location_name: Mapped[str] = mapped_column(String(500), nullable=False)
     latitude: Mapped[float] = mapped_column(Float, nullable=False)
     longitude: Mapped[float] = mapped_column(Float, nullable=False)
@@ -67,4 +71,7 @@ class Complaint(Base):
     )
     resolution: Mapped[Optional["ResolutionReport"]] = relationship(
         "ResolutionReport", back_populates="complaint", uselist=False, cascade="all, delete-orphan"
+    )
+    weather_observation: Mapped[Optional["WeatherObservation"]] = relationship(
+        "WeatherObservation", back_populates="complaint", uselist=False, cascade="all, delete-orphan"
     )

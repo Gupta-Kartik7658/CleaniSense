@@ -10,3 +10,5 @@ from app.models.complaint_attachment import ComplaintAttachment # noqa
 from app.models.resolution_report import ResolutionReport # noqa
 from app.models.notification import Notification # noqa
 from app.models.hotspot import Hotspot # noqa
+from app.models.weather_observation import WeatherObservation # noqa
+from app.models.system_setting import SystemSetting # noqa

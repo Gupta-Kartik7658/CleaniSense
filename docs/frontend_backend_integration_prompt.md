@@ -627,3 +627,28 @@ Update the implementation plan showing:
 Do NOT generate implementation code.
 
 Generate only the detailed integration plan.
+
+---
+
+# Current Implementation Update — 2026-07-08
+
+This prompt is now historical context. The current frontend/backend integration includes:
+
+- Complaint creation sends survey fields:
+  - `area_affected_sqm`
+  - `population_affected`
+  - `duration_hours`
+  - `survey_data`
+- Complaint cards, history, and details display severity score percentages when available.
+- `/forgot-password` sends Firebase password reset emails directly from the frontend.
+- `/admin/roles` allows superadmins to update user roles by email through `PATCH /api/v1/admin/users/role`.
+- Weather/AQI data is available through:
+  - `GET /api/v1/weather/current`
+  - `GET /api/v1/weather/complaints/{complaint_id}`
+  - `POST /api/v1/weather/complaints/{complaint_id}/refresh`
+- Hotspots are persisted/generated through:
+  - `GET /api/v1/hotspots`
+  - `GET /api/v1/hotspots/{id}`
+  - `POST /api/v1/hotspots/refresh`
+- Critical hotspot notifications appear in the existing notifications feed as `CRITICAL_HOTSPOT`.
+- Prediction routes are still present only as stubs/demo data and should not be treated as final SRS implementation.
