@@ -48,6 +48,10 @@ export interface ComplaintDetailResponse {
   density_score?: number;
   severity_breakdown?: string;
   image_analysis_summary?: string;
+  area_affected_sqm?: number;
+  population_affected?: number;
+  duration_hours?: number;
+  survey_data?: string;
   location_name: string;
   latitude: number;
   longitude: number;
@@ -67,4 +71,8 @@ export interface ComplaintCreatePayload {
   latitude: number;
   longitude: number;
   municipality_id?: string;
+  area_affected_sqm?: number;
+  population_affected?: number;
+  duration_hours?: number;
+  survey_data?: Record<string, unknown>;
 }
