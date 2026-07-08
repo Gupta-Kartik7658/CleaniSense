@@ -65,7 +65,7 @@ def list_complaints(
     )
     paginated_data = complaint_service.get_history(
         db=db,
-        user_id=current_user.id,
+        current_user=current_user,
         status_filter=status_filter,
         category_id=category_id,
         search=search,
@@ -92,7 +92,7 @@ def get_complaint_detail(
     Retrieve full complaint details including category, municipality, timeline, attachments, and resolution.
     """
     logger.info(f"Fetching complaint detail — id={id} user={current_user.id}")
-    complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
+    complaint = complaint_service.get_complaint(db, id, current_user)
     detail_data = ComplaintDetailResponse.model_validate(complaint)
     return standard_response(
         success=True,
@@ -114,7 +114,7 @@ def update_complaint(
         f"Updating complaint — id={id} user={current_user.id} "
         f"fields={complaint_in.model_dump(exclude_unset=True).keys()}"
     )
-    complaint = complaint_service.update_complaint(db, id, complaint_in, current_user.id)
+    complaint = complaint_service.update_complaint(db, id, complaint_in, current_user)
     logger.info(f"Complaint updated — id={id}")
     complaint_data = ComplaintResponse.model_validate(complaint)
     return standard_response(
@@ -156,7 +156,7 @@ async def upload_complaint_attachment(
         f"filename='{file.filename}' content_type='{file.content_type}'"
     )
     # Verify ownership of complaint before upload
-    complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
+    complaint = complaint_service.get_complaint(db, id, current_user)
     
     # Read file content
     content = await file.read()
@@ -193,7 +193,7 @@ def get_complaint_resolution(
     logger.info(f"Fetching resolution — complaint={id} user={current_user.id}")
     from app.constants.enums import ComplaintStatus
     
-    complaint = complaint_service.get_complaint(db, id, current_user.id, current_user.role)
+    complaint = complaint_service.get_complaint(db, id, current_user)
     if complaint.status != ComplaintStatus.RESOLVED.value or not complaint.resolution:
         logger.warning(f"Resolution not found — complaint={id} status={complaint.status}")
         raise HTTPException(

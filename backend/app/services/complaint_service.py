@@ -3,8 +3,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import HTTPException, status
+from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from app.models.user import User
 from app.models.complaint import Complaint
 from app.models.complaint_status_history import ComplaintStatusHistory
 from app.models.complaint_category import ComplaintCategory
@@ -90,7 +92,7 @@ class ComplaintService:
         logger.info(f"[ComplaintService] Complaint fully created — id={complaint.id} status={complaint.status}")
         return complaint
 
-    def get_complaint(self, db: Session, id: uuid.UUID, user_id: uuid.UUID, user_role: str) -> Complaint:
+    def get_complaint(self, db: Session, id: uuid.UUID, current_user: User) -> Complaint:
         """
         Retrieves a complaint after validating access permissions.
         """
@@ -103,15 +105,28 @@ class ComplaintService:
             )
             
         # Check permissions: citizens can only view their own complaints
-        if user_role == UserRole.CITIZEN.value and complaint.user_id != user_id:
-            logger.warning(
-                f"[ComplaintService] Permission denied — user={user_id} tried to access "
-                f"complaint={id} owned by user={complaint.user_id}"
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to view this complaint"
-            )
+        if current_user.role == UserRole.CITIZEN.value:
+            if complaint.user_id != current_user.id:
+                logger.warning(
+                    f"[ComplaintService] Permission denied — user={current_user.id} tried to access "
+                    f"complaint={id} owned by user={complaint.user_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to view this complaint"
+                )
+        # Check permissions: municipal staff can only view complaints from their own municipality
+        elif current_user.role in [UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value]:
+            if complaint.municipality_id != current_user.municipality_id:
+                logger.warning(
+                    f"[ComplaintService] Permission denied — municipal user={current_user.id} tried to access "
+                    f"complaint={id} assigned to municipality={complaint.municipality_id} "
+                    f"but user belongs to municipality={current_user.municipality_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to view complaints from other municipalities"
+                )
 
         # Generate fresh public URLs for any attachments (signed URLs for Supabase)
         from app.services.storage_service import storage_service
@@ -128,7 +143,7 @@ class ComplaintService:
     def get_history(
         self,
         db: Session,
-        user_id: uuid.UUID,
+        current_user: User,
         status_filter: Optional[str] = None,
         category_id: Optional[uuid.UUID] = None,
         search: Optional[str] = None,
@@ -138,7 +153,7 @@ class ComplaintService:
         page_size: int = 20
     ) -> dict:
         """
-        Returns advanced query result list for user complaint history.
+        Returns advanced query result list for user or municipal complaint history.
         """
         # Validate status if provided
         if status_filter and status_filter not in [s.value for s in ComplaintStatus]:
@@ -148,15 +163,34 @@ class ComplaintService:
                 detail=f"Invalid status filter value: {status_filter}"
             )
             
+        # Determine filtering based on user role
+        user_id_filter = None
+        municipality_id_filter = None
+        
+        if current_user.role == UserRole.CITIZEN.value:
+            user_id_filter = current_user.id
+        elif current_user.role in [UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value]:
+            municipality_id_filter = current_user.municipality_id
+        # super_admin gets all (no filters)
+
         return complaint_repository.list_history(
-            db, user_id, status_filter, category_id, search, sort_by, sort_order, page, page_size
+            db=db,
+            user_id=user_id_filter,
+            municipality_id=municipality_id_filter,
+            status=status_filter,
+            category_id=category_id,
+            search=search,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size
         )
 
     def update_complaint(
-        self, db: Session, id: uuid.UUID, obj_in: ComplaintUpdate, user_id: uuid.UUID
+        self, db: Session, id: uuid.UUID, obj_in: ComplaintUpdate, current_user: User
     ) -> Complaint:
         """
-        Updates basic details of a complaint if it is still in draft or submitted status.
+        Updates basic details or status/assignment properties based on role constraints.
         """
         complaint = complaint_repository.get(db, id)
         if not complaint:
@@ -164,57 +198,123 @@ class ComplaintService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Complaint not found"
             )
+
+        from app.schemas.complaint import ComplaintCitizenUpdate, ComplaintMunicipalityUpdate
+
+        data_keys = obj_in.model_dump(exclude_unset=True).keys()
+        mun_fields = {"status", "severity", "assigned_department", "assigned_officer", "resolution", "remarks"}
+        cit_fields = {"title", "description", "category_id", "location_name", "latitude", "longitude"}
+
+        if current_user.role == UserRole.CITIZEN.value:
+            # 1. Reject municipal field updates
+            if any(k in mun_fields for k in data_keys):
+                logger.warning(f"[ComplaintService] Citizen update blocked — tried to edit municipal fields: {data_keys}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Citizens are not permitted to modify municipal dashboard action fields."
+                )
+
+            # Validate against Citizen schema
+            validated = ComplaintCitizenUpdate.model_validate(obj_in.model_dump(exclude_unset=True))
             
-        # Ownership check
-        if complaint.user_id != user_id:
-            logger.warning(f"[ComplaintService] Update denied — user={user_id} complaint={id}")
+            # 2. Ownership check
+            if complaint.user_id != current_user.id:
+                logger.warning(f"[ComplaintService] Update denied — user={current_user.id} complaint={id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to modify this complaint"
+                )
+                
+            # 3. Restrict edit based on status
+            if complaint.status not in [ComplaintStatus.DRAFT.value, ComplaintStatus.SUBMITTED.value]:
+                logger.warning(f"[ComplaintService] Update denied — complaint={id} status={complaint.status}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Complaints cannot be modified once they transition to state: {complaint.status}"
+                )
+
+            # Validate category if updating
+            if validated.category_id:
+                category = db.query(ComplaintCategory).filter(
+                    ComplaintCategory.id == validated.category_id,
+                    ComplaintCategory.is_active == True
+                ).first()
+                if not category:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Selected complaint category is invalid or inactive"
+                    )
+
+            update_data = validated.model_dump(exclude_unset=True)
+            if "latitude" in update_data or "longitude" in update_data:
+                lat = update_data.get("latitude", complaint.latitude)
+                lng = update_data.get("longitude", complaint.longitude)
+                update_data["geo_point"] = f"POINT({lng} {lat})"
+
+            return complaint_repository.update(db, complaint, update_data)
+
+        elif current_user.role in [UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value]:
+            # 1. Reject citizen field updates
+            if any(k in cit_fields for k in data_keys):
+                logger.warning(f"[ComplaintService] Municipal update blocked — tried to edit citizen fields: {data_keys}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Municipal staff are not permitted to modify citizen reporting details."
+                )
+
+            # Validate against Municipality schema
+            validated = ComplaintMunicipalityUpdate.model_validate(obj_in.model_dump(exclude_unset=True))
+
+            # 2. Tenancy check
+            if complaint.municipality_id != current_user.municipality_id:
+                logger.warning(
+                    f"[ComplaintService] Municipal update blocked — user={current_user.id} "
+                    f"tried to update complaint={id} of municipality={complaint.municipality_id}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You do not have permission to view or modify complaints from other municipalities"
+                )
+
+            # 3. Process severity/priority
+            if validated.severity is not None:
+                complaint.severity = validated.severity
+
+            # 4. Process assignments
+            if validated.assigned_department is not None:
+                complaint.assigned_department = validated.assigned_department
+            if validated.assigned_officer is not None:
+                complaint.assigned_officer = validated.assigned_officer
+
+            db.add(complaint)
+            db.commit()
+
+            # 5. Process status transition state machine rules
+            if validated.status is not None:
+                resolution_payload = None
+                if validated.resolution:
+                    resolution_payload = validated.resolution.model_dump(exclude_unset=True)
+                
+                complaint = self.transition_status(
+                    db=db,
+                    id=id,
+                    next_status=validated.status,
+                    remarks=validated.remarks,
+                    changed_by=current_user.id,
+                    resolution_data=resolution_payload,
+                    assignment_data={
+                        "department": validated.assigned_department,
+                        "officer_name": validated.assigned_officer
+                    } if (validated.assigned_department or validated.assigned_officer) else None
+                )
+
+            return complaint
+
+        else:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="You do not have permission to modify this complaint"
+                detail="Role does not have permission to update complaints."
             )
-            
-        # Restrict edit based on status
-        if complaint.status not in [ComplaintStatus.DRAFT.value, ComplaintStatus.SUBMITTED.value]:
-            logger.warning(f"[ComplaintService] Update denied — complaint={id} status={complaint.status}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Complaints cannot be modified once they transition to state: {complaint.status}"
-            )
-
-        # Validate category if updating
-        if obj_in.category_id:
-            category = db.query(ComplaintCategory).filter(
-                ComplaintCategory.id == obj_in.category_id,
-                ComplaintCategory.is_active == True
-            ).first()
-            if not category:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected complaint category is invalid or inactive"
-                )
-
-        # Validate municipality if updating
-        if obj_in.municipality_id:
-            municipality = db.query(Municipality).filter(
-                Municipality.id == obj_in.municipality_id,
-                Municipality.is_active == True
-            ).first()
-            if not municipality:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Selected municipality is invalid or inactive"
-                )
-
-        update_data = obj_in.model_dump(exclude_unset=True)
-        logger.info(f"[ComplaintService] Updating complaint={id} fields={list(update_data.keys())}")
-        
-        # Update geo_point coordinate representation if lat/lng are updated
-        if "latitude" in update_data or "longitude" in update_data:
-            lat = update_data.get("latitude", complaint.latitude)
-            lng = update_data.get("longitude", complaint.longitude)
-            update_data["geo_point"] = f"POINT({lng} {lat})"
-
-        return complaint_repository.update(db, complaint, update_data)
 
     def cancel_complaint(self, db: Session, id: uuid.UUID, user_id: uuid.UUID) -> Complaint:
         """
@@ -253,7 +353,8 @@ class ComplaintService:
         next_status: str,
         remarks: Optional[str],
         changed_by: uuid.UUID,
-        resolution_data: Optional[dict] = None
+        resolution_data: Optional[dict] = None,
+        assignment_data: Optional[dict] = None
     ) -> Complaint:
         """
         Transitions a complaint through the state machine.
@@ -304,6 +405,16 @@ class ComplaintService:
             )
             db.add(resolution)
             logger.info(f"[ComplaintService] Resolution report created for complaint={id}")
+
+        # If transitioning to officer assigned, save assignment details
+        if next_status == ComplaintStatus.OFFICER_ASSIGNED.value:
+            if assignment_data:
+                complaint.assigned_department = assignment_data.get("department")
+                complaint.assigned_officer = assignment_data.get("officer_name")
+                logger.info(
+                    f"[ComplaintService] Assigned complaint={id} to "
+                    f"dept='{complaint.assigned_department}' officer='{complaint.assigned_officer}'"
+                )
 
         # Transition status
         complaint.status = next_status
@@ -401,5 +512,51 @@ class ComplaintService:
             message=message,
             notification_type=notification_type
         )
+
+    def get_municipal_overview(self, db: Session, municipality_id: uuid.UUID) -> dict:
+        """
+        Returns stats counts grouped logically for the municipality.
+        """
+        status_counts = complaint_repository.count_by_status(db, municipality_id=municipality_id)
+        
+        # Calculate stats
+        total_reports = sum(status_counts.values())
+        resolved_reports = status_counts.get(ComplaintStatus.RESOLVED.value, 0)
+        
+        active_statuses = [
+            ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
+            ComplaintStatus.OFFICER_ASSIGNED.value,
+            ComplaintStatus.IN_PROGRESS.value,
+            ComplaintStatus.INSPECTION_COMPLETED.value
+        ]
+        active_reports = sum(status_counts.get(status, 0) for status in active_statuses)
+        
+        pending_statuses = [
+            ComplaintStatus.SUBMITTED.value,
+            ComplaintStatus.AI_VALIDATION_COMPLETED.value
+        ]
+        pending_reports = sum(status_counts.get(status, 0) for status in pending_statuses)
+        
+        return {
+            "total_reports": total_reports,
+            "active_reports": active_reports,
+            "resolved_reports": resolved_reports,
+            "pending_reports": pending_reports
+        }
+
+    def get_recent_municipal_complaints(self, db: Session, municipality_id: uuid.UUID) -> list:
+        """
+        Retrieves the 5 most recent complaints assigned to the municipality.
+        """
+        return db.query(Complaint).filter(
+            Complaint.municipality_id == municipality_id,
+            Complaint.is_deleted == False
+        ).order_by(desc(Complaint.created_at)).limit(5).all()
+
+    def get_recent_municipal_activity(self, db: Session, municipality_id: uuid.UUID) -> list:
+        """
+        Retrieves the 10 most recent status changes in the municipality.
+        """
+        return complaint_repository.get_recent_activity(db, municipality_id, limit=10)
 
 complaint_service = ComplaintService()

@@ -1,9 +1,34 @@
 import uuid
-from typing import Optional, List, Dict
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from app.schemas.complaint import ComplaintResponse
 from app.schemas.hotspot import HotspotResponse
 from app.schemas.profile import UserPreferenceBase
+
+class ComplaintMapPoint(BaseModel):
+    id: uuid.UUID
+    title: str
+    status: str
+    latitude: float
+    longitude: float
+    location_name: str
+    category_name: Optional[str] = None
+
+class ComplaintHotspotCluster(BaseModel):
+    id: str
+    latitude: float
+    longitude: float
+    count: int
+    radius_meters: float
+    complaint_ids: List[uuid.UUID]
+    complaints: List[ComplaintMapPoint]
+
+class ComplaintMapData(BaseModel):
+    singles: List[ComplaintMapPoint]
+    hotspots: List[ComplaintHotspotCluster]
+    total_complaints: int
+    hotspot_radius_meters: float = 50.0
 
 class CategoryResponse(BaseModel):
     id: uuid.UUID
@@ -40,5 +65,28 @@ class DashboardResponse(BaseModel):
     overview: DashboardOverview
     recent_reports: List[ComplaintResponse]
     nearby_hotspots: List[HotspotResponse]
+    complaint_map: ComplaintMapData
     unread_notifications: int
     preferences: UserPreferenceBase
+
+class MunicipalityDashboardOverview(BaseModel):
+    total_reports: int
+    active_reports: int
+    resolved_reports: int
+    pending_reports: int
+
+class MunicipalityStatusActivityResponse(BaseModel):
+    id: uuid.UUID
+    complaint_id: uuid.UUID
+    status: str
+    remarks: Optional[str] = None
+    changed_by: Optional[uuid.UUID] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class MunicipalityDashboardResponse(BaseModel):
+    overview: MunicipalityDashboardOverview
+    recent_complaints: List[ComplaintResponse]
+    recent_activity: List[MunicipalityStatusActivityResponse]

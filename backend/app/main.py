@@ -19,6 +19,10 @@ try:
 except Exception as exc:
     logger.warning(f"Database bootstrap skipped due to startup error: {exc}")
 
+# Seed master data (categories, municipalities) if missing
+from app.database.seed import seed_db
+seed_db()
+
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.middleware.logging_middleware import LoggingMiddleware

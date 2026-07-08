@@ -36,10 +36,38 @@ export interface BackendUserPreference {
   notifications_enabled: boolean;
 }
 
+export interface ComplaintMapPoint {
+  id: string;
+  title: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  location_name: string;
+  category_name?: string | null;
+}
+
+export interface ComplaintHotspotCluster {
+  id: string;
+  latitude: number;
+  longitude: number;
+  count: number;
+  radius_meters: number;
+  complaint_ids: string[];
+  complaints: ComplaintMapPoint[];
+}
+
+export interface ComplaintMapData {
+  singles: ComplaintMapPoint[];
+  hotspots: ComplaintHotspotCluster[];
+  total_complaints: number;
+  hotspot_radius_meters: number;
+}
+
 export interface BackendDashboardResponse {
   overview: DashboardOverview;
   recent_reports: BackendComplaintItem[];
   nearby_hotspots: BackendHotspotItem[];
+  complaint_map: ComplaintMapData;
   unread_notifications: number;
   preferences: BackendUserPreference;
 }
@@ -78,5 +106,6 @@ export interface DashboardData {
   summary: StatCardData[];
   reports: ReportItem[];
   hotspots: HotspotItem[];
+  complaintMap: ComplaintMapData;
   unreadNotifications?: number;
 }

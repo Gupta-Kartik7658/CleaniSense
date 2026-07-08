@@ -67,7 +67,8 @@ class ComplaintRepository:
     def list_history(
         self,
         db: Session,
-        user_id: uuid.UUID,
+        user_id: Optional[uuid.UUID] = None,
+        municipality_id: Optional[uuid.UUID] = None,
         status: Optional[str] = None,
         category_id: Optional[uuid.UUID] = None,
         search: Optional[str] = None,
@@ -76,11 +77,13 @@ class ComplaintRepository:
         page: int = 1,
         page_size: int = 20
     ) -> dict:
-        """Advanced query filtering for user complaint history."""
-        query = db.query(Complaint).filter(
-            Complaint.user_id == user_id,
-            Complaint.is_deleted == False
-        )
+        """Advanced query filtering for user or municipal complaint history."""
+        query = db.query(Complaint).filter(Complaint.is_deleted == False)
+
+        if user_id:
+            query = query.filter(Complaint.user_id == user_id)
+        if municipality_id:
+            query = query.filter(Complaint.municipality_id == municipality_id)
 
         if status:
             query = query.filter(Complaint.status == status)
@@ -105,15 +108,34 @@ class ComplaintRepository:
 
         return paginate(query, page, page_size)
 
-    def count_by_status(self, db: Session, user_id: uuid.UUID) -> dict:
+    def count_by_status(
+        self,
+        db: Session,
+        user_id: Optional[uuid.UUID] = None,
+        municipality_id: Optional[uuid.UUID] = None
+    ) -> dict:
         """Count active complaints grouped by status."""
         from sqlalchemy import func
-        results = db.query(
+        query = db.query(
             Complaint.status, func.count(Complaint.id)
         ).filter(
-            Complaint.user_id == user_id,
             Complaint.is_deleted == False
-        ).group_by(Complaint.status).all()
+        )
+        if user_id:
+            query = query.filter(Complaint.user_id == user_id)
+        if municipality_id:
+            query = query.filter(Complaint.municipality_id == municipality_id)
+            
+        results = query.group_by(Complaint.status).all()
         return dict(results)
+
+    def get_recent_activity(self, db: Session, municipality_id: uuid.UUID, limit: int = 10) -> list:
+        """Fetch status history logs across complaints in the municipality."""
+        return db.query(ComplaintStatusHistory).join(
+            Complaint, ComplaintStatusHistory.complaint_id == Complaint.id
+        ).filter(
+            Complaint.municipality_id == municipality_id,
+            Complaint.is_deleted == False
+        ).order_by(desc(ComplaintStatusHistory.created_at)).limit(limit).all()
 
 complaint_repository = ComplaintRepository()

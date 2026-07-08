@@ -4,6 +4,29 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-07] Refined Municipal Dashboard MVP Backend & Validation
+
+#### Single-Endpoint PUT Refactoring
+- **Clean Schema Separation**: Created separate Pydantic schemas: `ComplaintCitizenUpdate` (capturing citizen details) and `ComplaintMunicipalityUpdate` (capturing status transitions, priority, and assignments).
+- **Thin Router Constraints**: Standardized the FastAPI router function to simply accept the payload schema and pass it directly to `ComplaintService.update_complaint`.
+- **Service-Layer Schema Validation**: Implemented dynamic Pydantic model validation inside `ComplaintService` branching on user roles to ensure citizens cannot modify municipal action fields and vice-versa.
+
+#### Lightweight Dashboard & Dedicated Resource Routes
+- **Orchestration Pattern**: Refactored `DashboardService` into a clean data orchestrator that aggregates summaries without invoking direct SQL queries or calculations.
+- **Lightweight Feed**: Scaled `GET /api/v1/dashboard` down to only returning summary counts, recent complaints, and recent activity events.
+- **Dedicated Resource APIs**: Registered `/api/v1/analytics` and `/api/v1/map` routes to return heavy chart distributions and hotspot map cluster coordinates.
+- **Chart-Ready Arrays**: Implemented `AnalyticsService` formatting status/category distributions as frontend-ready list structures: `[{"label": "name", "count": N}]`.
+
+#### Verification & Test Validation
+- Created integration suite `tests/test_municipality_dashboard.py` verifying dynamic schemas validation rules, orchestrator calls delegation, chart arrays, and access boundaries.
+- Confirmed all **36 tests pass successfully** under clean database test transactions.
+
+### [2026-07-07] Idempotent Authentication Login Flow & Document Verification
+
+#### Idempotent User Login Flow
+- **Idempotent Matching Logic**: Updated `AuthService.authenticate_user` in `backend/app/services/auth_service.py` to first search for the user by `firebase_uid`, then by `email`. If found, updates mutable user fields (name, profile picture) dynamically instead of inserting a new row, resolving the database conflict error (`UNIQUE constraint failed: users.email`).
+- **Validation Test Suite**: Added a unit test `test_idempotent_login` inside `backend/tests/test_auth.py` that mocks consecutive Firebase logins with the same email/UID, verifying that only one user record exists and that properties are updated correctly.
+
 ### [2026-07-06] Remove Alembic Migrations, Resolve Auth Race Condition & Workspace Cleanup
 
 #### Alembic Database Migrations Removal

@@ -118,3 +118,41 @@ class TestAuthentication(unittest.TestCase):
             checker(current_user=user)
         self.assertEqual(context.exception.status_code, 403)
         self.assertIn("Operation restricted", context.exception.detail)
+
+    @patch("app.api.deps.auth_service.verify_firebase_token")
+    def test_idempotent_login(self, mock_verify):
+        mock_verify.return_value = {
+            "uid": "new_google_user_uid",
+            "email": "new_google_user@test.com",
+            "name": "Google User Original",
+            "picture": "http://original.jpg"
+        }
+        
+        # 1. First login (should create new user)
+        response1 = client.post("/api/v1/auth/login", json={"idToken": "token_val"})
+        self.assertEqual(response1.status_code, 200)
+        self.assertTrue(response1.json()["success"])
+        
+        # Query count
+        count1 = self.db.query(User).filter(User.email == "new_google_user@test.com").count()
+        self.assertEqual(count1, 1)
+        
+        # 2. Second login with same account but updated name/picture (should update)
+        mock_verify.return_value = {
+            "uid": "new_google_user_uid",
+            "email": "new_google_user@test.com",
+            "name": "Google User Updated",
+            "picture": "http://updated.jpg"
+        }
+        response2 = client.post("/api/v1/auth/login", json={"idToken": "token_val"})
+        self.assertEqual(response2.status_code, 200)
+        self.assertTrue(response2.json()["success"])
+        
+        # Assert count is still exactly 1
+        count2 = self.db.query(User).filter(User.email == "new_google_user@test.com").count()
+        self.assertEqual(count2, 1)
+        
+        # Fetch user and assert details updated
+        updated_user = self.db.query(User).filter(User.email == "new_google_user@test.com").first()
+        self.assertEqual(updated_user.name, "Google User Updated")
+        self.assertEqual(updated_user.profile_picture, "http://updated.jpg")

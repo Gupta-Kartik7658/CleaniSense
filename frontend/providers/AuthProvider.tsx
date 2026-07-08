@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInWithPopup, signOut, onIdTokenChanged, User as FirebaseUser } from "firebase/auth";
 import { auth, googleProvider } from "../lib/firebase";
@@ -26,25 +26,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileData, setProfileData] = useState<ProfileResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const syncSessionRef = useRef<Promise<void> | null>(null);
+
+  const syncSessionWithBackend = async (firebaseUser: FirebaseUser) => {
+    if (syncSessionRef.current) {
+      await syncSessionRef.current;
+      return;
+    }
+
+    syncSessionRef.current = (async () => {
+      const token = await firebaseUser.getIdToken();
+      document.cookie = `cleanisense_token=${token}; path=/; max-age=3600; SameSite=Lax; Secure`;
+
+      const backendUser = await authService.loginWithFirebase(token);
+      setUser(backendUser);
+      const profile = await profileService.getProfile();
+      setProfileData(profile);
+    })();
+
+    try {
+      await syncSessionRef.current;
+    } finally {
+      syncSessionRef.current = null;
+    }
+  };
 
   const handleAuthChange = async (firebaseUser: FirebaseUser | null) => {
     if (!firebaseUser) {
       setUser(null);
-      // Remove token cookie for middleware check on server sides
+      setProfileData(null);
       document.cookie = "cleanisense_token=; path=/; max-age=0; SameSite=Lax";
       setLoading(false);
       return;
     }
 
+    if (syncSessionRef.current) {
+      await syncSessionRef.current;
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     try {
-      const token = await firebaseUser.getIdToken();
-      // Set token cookie to allow Next.js middleware route intercept checks
-      document.cookie = `cleanisense_token=${token}; path=/; max-age=31536000; SameSite=Lax; Secure`;
-      
-      const backendUser = await authService.loginWithFirebase(token);
-      setUser(backendUser);
-      const profile = await profileService.getProfile();
-      setProfileData(profile);
+      await syncSessionWithBackend(firebaseUser);
     } catch (error) {
       console.error("Session sync failed with FastAPI backend:", error);
       setUser(null);
@@ -65,19 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      const token = await result.user.getIdToken();
-      
-      document.cookie = `cleanisense_token=${token}; path=/; max-age=31536000; SameSite=Lax; Secure`;
-      
-      const backendUser = await authService.loginWithFirebase(token, requestedRole);
-      setUser(backendUser);
-      const profile = await profileService.getProfile();
-      setProfileData(profile);
-      if (requestedRole && requestedRole !== 'citizen') {
-        router.push("/admin");
-      } else {
-        router.push("/dashboard");
-      }
+      await syncSessionWithBackend(result.user);
+      router.push("/dashboard");
     } catch (error) {
       console.error("Authentication popup login failed:", error);
       throw error;

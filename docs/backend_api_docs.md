@@ -56,11 +56,11 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 ### 3.1 Authentication
 
 #### `POST /api/v1/auth/login`
-- **Description**: Verifies a client-side Firebase ID token, creates the user profile if it is their first login, and registers the session.
+- **Description**: Verifies a client-side Firebase ID token, creates the user profile if it is their first login (or updates details of an existing user), and registers the session.
 - **Request Body**:
   ```json
   {
-    "id_token": "string"
+    "idToken": "string"
   }
   ```
 - **Response Data (`data` field)**:
@@ -138,6 +138,7 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 
 #### `GET /api/v1/dashboard`
 - **Description**: Aggregates statistics, recent reports, nearby hotspots, and current user configurations in a single view query.
+  - *Note: If the logged-in user is a Municipal Officer/Admin, this endpoint returns the lightweight municipal dashboard summary instead. Refer to the dedicated [Municipal Dashboard Integration Guide](file:///c:/Users/Husain/Documents/Build%20with%20AI%20-%20Google/CleaniSense/docs/municipal_api_docs.md) for full municipal schemas.*
 - **Query Parameters**:
   - `latitude`: `float` (optional, ge=-90.0, le=90.0)
   - `longitude`: `float` (optional, ge=-180.0, le=180.0)

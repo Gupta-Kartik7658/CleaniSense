@@ -1,5 +1,6 @@
 import logging
 from firebase_admin import auth
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from app.core.firebase import initialize_firebase
 from app.services.user_service import user_service
@@ -65,8 +66,18 @@ class AuthService:
                 role=target_role,
                 is_active=True
             )
-            user = user_service.create_user(db, user_in)
-            logger.info(f"Registered new user: {email} with role: {target_role} and UID: {firebase_uid}")
+            try:
+                user = user_service.create_user(db, user_in)
+                logger.info(f"Registered new citizen user: {email} with UID: {firebase_uid}")
+            except IntegrityError:
+                # Concurrent login requests can race on first sign-in
+                db.rollback()
+                user = user_service.get_user_by_firebase_uid(db, firebase_uid)
+                if not user:
+                    user = user_service.get_user_by_email(db, email)
+                if not user:
+                    raise
+                logger.info(f"Resolved concurrent registration for existing user: {email}")
 
         if not user.is_active:
             raise PermissionError("User account has been deactivated")

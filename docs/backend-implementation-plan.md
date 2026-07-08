@@ -1,8 +1,11 @@
 # CleaniSense — Backend Implementation Plan
 
-**Version:** 1.0
-**Last Updated:** 2026-07-04
-**Status:** Approved — Ready for Implementation
+**Version:** 1.1
+**Last Updated:** 2026-07-07
+**Status:** Approved — Completed
+
+> [!NOTE]
+> As of recent updates, Alembic migrations have been removed to simplify schema initialization. The database schema is now initialized directly from SQLAlchemy metadata using `Base.metadata.create_all(bind=engine)` inside `backend/app/main.py`.
 
 > This document is the **single source of truth** for CleaniSense backend development.
 > Written for handoff to senior backend engineers building a production-ready government civic platform.
