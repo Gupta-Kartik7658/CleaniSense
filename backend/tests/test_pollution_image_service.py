@@ -37,7 +37,7 @@ class TestPollutionImageService(unittest.TestCase):
             cv2.circle(overlay, center, radius, (180, 180, 180), thickness=cv2.FILLED)
         image = cv2.addWeighted(overlay, 0.55, image, 0.45, 0)
 
-        result = self.service.analyze(image)
+        result = self.service.analyze(image, category_name="Air Pollution - smoke")
 
         self.assertEqual(result.dominant_type, "smoke")
         self.assertGreater(result.detectors["smoke"].score, 0.35)
@@ -83,7 +83,10 @@ class TestPollutionImageService(unittest.TestCase):
                 thickness=1,
             )
 
-        result = self.service.analyze(image)
+        result = self.service.analyze(
+            image,
+            category_name="Waste Management - garbage accumulation",
+        )
 
         self.assertEqual(result.dominant_type, "garbage_accumulation")
         self.assertGreater(result.detectors["garbage_accumulation"].score, 0.30)

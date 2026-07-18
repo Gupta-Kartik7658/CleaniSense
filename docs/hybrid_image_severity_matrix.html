@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hybrid Image Severity Matrix</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #18202a;
+      --muted: #657180;
+      --border: #d8dee8;
+      --good: #0f766e;
+      --warn: #b45309;
+      --bad: #b91c1c;
+      --zero: #6b7280;
+      --head: #eef2f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 28px 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 8px 0;
+      line-height: 1.5;
+    }
+    .muted { color: var(--muted); }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+      margin: 18px 0;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .stat strong {
+      display: block;
+      font-size: 24px;
+      margin-bottom: 3px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px;
+      text-align: center;
+      vertical-align: middle;
+      font-size: 14px;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: var(--head);
+      font-weight: 700;
+    }
+    .image-cell {
+      min-width: 190px;
+      text-align: left;
+      font-weight: 600;
+    }
+    .image-cell img {
+      display: block;
+      width: 150px;
+      height: 105px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      background: #fff;
+    }
+    .image-cell div {
+      max-width: 240px;
+      overflow-wrap: anywhere;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .score {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 58px;
+      height: 30px;
+      border-radius: 999px;
+      font-weight: 700;
+      border: 1px solid transparent;
+    }
+    .score.high { color: #fff; background: var(--bad); }
+    .score.mid { color: #fff; background: var(--warn); }
+    .score.low { color: #fff; background: var(--good); }
+    .score.zero { color: var(--zero); background: #f3f4f6; border-color: var(--border); }
+    .score.fail { color: #fff; background: #4b5563; }
+    .best-cell {
+      min-width: 150px;
+      font-weight: 700;
+    }
+    .best-cell span {
+      display: block;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 4px;
+    }
+    .failure-table td, .failure-table th {
+      text-align: left;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 14px 0 18px;
+    }
+    .legend span {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Hybrid Image Severity Matrix</h1>
+    <p>Gemini is treated as the semantic source of truth. OpenCV is used only as a corroborating visual signal.</p>
+    <div class="stats">
+      <div class="stat"><strong>105</strong><span>Total category checks</span></div>
+      <div class="stat"><strong>75</strong><span>Usable Gemini results</span></div>
+      <div class="stat"><strong>25</strong><span>Quota/rate-limit cells</span></div>
+      <div class="stat"><strong>11</strong><span>Verified non-zero scores</span></div>
+    </div>
+    <div class="legend">
+      <span>0.00 = Gemini rejected that category</span>
+      <span>QTA = Gemini quota/rate limit</span>
+      <span>ERR = local analysis failed</span>
+      <span>Noise excluded: still images cannot verify sound</span>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Image</th>
+            <th>Smoke</th>
+            <th>Dust/Haze</th>
+            <th>Garbage</th>
+            <th>Water</th>
+            <th>Wastewater</th>
+            <th>Best Match</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="image-cell"><img src="../images/_120349943_gettyimages-863388332.jpg" alt="_120349943_gettyimages-863388332.jpg"><div>_120349943_gettyimages-863388332.jpg</div></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: dust_haze raw=53.52"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: dust_haze raw=53.52"><span class="score high">76.98</span></td><td title="Gemini: dust_haze severity=85.0 confidence=98.0; OpenCV: dust_haze raw=53.52"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=98.0; OpenCV: water_contamination raw=53.52"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=90.0 confidence=98.0; OpenCV: water_contamination raw=53.52"><span class="score zero">0.00</span></td><td class="best-cell">dust_haze<span>76.98</span></td></tr><tr><td class="image-cell"><img src="../images/delhiairpollutionimage_667b82c6342d4.jpg" alt="delhiairpollutionimage_667b82c6342d4.jpg"><div>delhiairpollutionimage_667b82c6342d4.jpg</div></td><td title="Gemini: dust_haze severity=75.0 confidence=95.0; OpenCV: smoke raw=61.34"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=75.0 confidence=95.0; OpenCV: smoke raw=61.34"><span class="score mid">59.84</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: wastewater_sewerage raw=61.34"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: wastewater_sewerage raw=61.34"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: wastewater_sewerage raw=61.34"><span class="score zero">0.00</span></td><td class="best-cell">dust_haze<span>59.84</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%281%29.jpg" alt="images (1).jpg"><div>images (1).jpg</div></td><td title="Gemini: smoke severity=75.0 confidence=98.0; OpenCV: smoke raw=70.56"><span class="score mid">73.61</span></td><td title="Gemini: smoke severity=75.0 confidence=98.0; OpenCV: smoke raw=70.56"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=98.0; OpenCV: garbage_accumulation raw=70.56"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=70.56"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=70.56"><span class="score zero">0.00</span></td><td class="best-cell">smoke<span>73.61</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%2810%29.jpg" alt="images (10).jpg"><div>images (10).jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=82.43"><span class="score high">83.96</span></td><td class="best-cell">wastewater_sewerage<span>83.96</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%2811%29.jpg" alt="images (11).jpg"><div>images (11).jpg</div></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=95.0; OpenCV: smoke raw=82.83"><span class="score zero">0.00</span></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=98.0; OpenCV: smoke raw=82.83"><span class="score zero">0.00</span></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=95.0; OpenCV: garbage_accumulation raw=82.83"><span class="score zero">0.00</span></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=82.83"><span class="score zero">0.00</span></td><td title="Gemini: wastewater_sewerage severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=82.83"><span class="score high">84.05</span></td><td class="best-cell">wastewater_sewerage<span>84.05</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%2812%29.jpg" alt="images (12).jpg"><div>images (12).jpg</div></td><td title="Gemini: garbage_accumulation severity=92.0 confidence=98.0; OpenCV: smoke raw=81.52"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=92.0 confidence=98.0; OpenCV: smoke raw=81.52"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=100.0; OpenCV: garbage_accumulation raw=81.52"><span class="score high">88.13</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=98.0; OpenCV: wastewater_sewerage raw=81.52"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=98.0; OpenCV: wastewater_sewerage raw=81.52"><span class="score zero">0.00</span></td><td class="best-cell">garbage_accumulation<span>88.13</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%2813%29.jpg" alt="images (13).jpg"><div>images (13).jpg</div></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=74.34"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=74.34"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: garbage_accumulation raw=74.34"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: wastewater_sewerage raw=74.34"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: wastewater_sewerage raw=74.34"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%2814%29.jpg" alt="images (14).jpg"><div>images (14).jpg</div></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=55.92"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=55.92"><span class="score zero">0.00</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%2815%29.jpg" alt="images (15).jpg"><div>images (15).jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: water_contamination raw=81.17"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%2816%29.jpg" alt="images (16).jpg"><div>images (16).jpg</div></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=82.32"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: smoke raw=82.32"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: garbage_accumulation raw=82.32"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: water_contamination raw=82.32"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: water_contamination raw=82.32"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%282%29.jpg" alt="images (2).jpg"><div>images (2).jpg</div></td><td title="Gemini: smoke severity=80.0 confidence=95.0; OpenCV: smoke raw=80.15"><span class="score high">78.91</span></td><td title="Gemini: smoke severity=80.0 confidence=95.0; OpenCV: smoke raw=80.15"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=95.0; OpenCV: garbage_accumulation raw=80.15"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=95.0; OpenCV: water_contamination raw=80.15"><span class="score zero">0.00</span></td><td title="Gemini: smoke severity=85.0 confidence=95.0; OpenCV: water_contamination raw=80.15"><span class="score zero">0.00</span></td><td class="best-cell">smoke<span>78.91</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%283%29.jpg" alt="images (3).jpg"><div>images (3).jpg</div></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: smoke raw=82.79"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: smoke raw=82.79"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: garbage_accumulation raw=82.79"><span class="score high">92.31</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: wastewater_sewerage raw=82.79"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: wastewater_sewerage raw=82.79"><span class="score zero">0.00</span></td><td class="best-cell">garbage_accumulation<span>92.31</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%284%29.jpg" alt="images (4).jpg"><div>images (4).jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: smoke raw=80.03"><span class="score zero">0.00</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%285%29.jpg" alt="images (5).jpg"><div>images (5).jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: garbage_accumulation severity=85.0 confidence=98.0; OpenCV: garbage_accumulation raw=81.15"><span class="score high">83.68</span></td><td title="Gemini: garbage_accumulation severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=81.15"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=85.0 confidence=98.0; OpenCV: wastewater_sewerage raw=81.15"><span class="score zero">0.00</span></td><td class="best-cell">garbage_accumulation<span>83.68</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%286%29.jpg" alt="images (6).jpg"><div>images (6).jpg</div></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=100.0; OpenCV: smoke raw=77.78"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=95.0 confidence=98.0; OpenCV: smoke raw=77.78"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=98.0; OpenCV: garbage_accumulation raw=77.78"><span class="score high">86.82</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=98.0; OpenCV: garbage_accumulation raw=77.78"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=90.0 confidence=98.0; OpenCV: garbage_accumulation raw=77.78"><span class="score zero">0.00</span></td><td class="best-cell">garbage_accumulation<span>86.82</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%287%29.jpg" alt="images (7).jpg"><div>images (7).jpg</div></td><td title="Gemini: garbage_accumulation severity=75.0 confidence=98.0; OpenCV: smoke raw=78.91"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=75.0 confidence=98.0; OpenCV: smoke raw=78.91"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=80.0 confidence=98.0; OpenCV: garbage_accumulation raw=78.91"><span class="score high">79.31</span></td><td title="Gemini: garbage_accumulation severity=75.0 confidence=98.0; OpenCV: wastewater_sewerage raw=78.91"><span class="score zero">0.00</span></td><td title="Gemini: garbage_accumulation severity=75.0 confidence=98.0; OpenCV: wastewater_sewerage raw=78.91"><span class="score zero">0.00</span></td><td class="best-cell">garbage_accumulation<span>79.31</span></td></tr><tr><td class="image-cell"><img src="../images/images%20%288%29.jpg" alt="images (8).jpg"><div>images (8).jpg</div></td><td title="Gemini: water_contamination severity=90.0 confidence=98.0; OpenCV: smoke raw=78.67"><span class="score zero">0.00</span></td><td title="Gemini: water_contamination severity=90.0 confidence=98.0; OpenCV: smoke raw=78.67"><span class="score zero">0.00</span></td><td title="Gemini: water_contamination severity=85.0 confidence=98.0; OpenCV: garbage_accumulation raw=78.67"><span class="score zero">0.00</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: water_contamination severity=85.0 confidence=95.0; OpenCV: water_contamination raw=78.67"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images%20%289%29.jpg" alt="images (9).jpg"><div>images (9).jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images.jpg" alt="images.jpg"><div>images.jpg</div></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini quota/rate limit blocked this cell."><span class="score fail">QTA</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: garbage_accumulation raw=45.94"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: wastewater_sewerage raw=45.94"><span class="score zero">0.00</span></td><td title="Gemini: dust_haze severity=85.0 confidence=95.0; OpenCV: wastewater_sewerage raw=45.94"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/images.png" alt="images.png"><div>images.png</div></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: garbage_accumulation raw=75.42"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: garbage_accumulation raw=75.42"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: garbage_accumulation raw=75.42"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: water_contamination raw=75.42"><span class="score zero">0.00</span></td><td title="Gemini: none severity=0.0 confidence=10.0; OpenCV: water_contamination raw=75.42"><span class="score zero">0.00</span></td><td class="best-cell">none</td></tr><tr><td class="image-cell"><img src="../images/ngt-issues-notice-to-up-after-report-on-water-contamination.avif" alt="ngt-issues-notice-to-up-after-report-on-water-contamination.avif"><div>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</div></td><td title="ValueError: Unable to decode image bytes."><span class="score fail">ERR</span></td><td title="ValueError: Unable to decode image bytes."><span class="score fail">ERR</span></td><td title="ValueError: Unable to decode image bytes."><span class="score fail">ERR</span></td><td title="ValueError: Unable to decode image bytes."><span class="score fail">ERR</span></td><td title="ValueError: Unable to decode image bytes."><span class="score fail">ERR</span></td><td class="best-cell">none</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h2>Failure Details</h2>
+    <table class="failure-table"><thead><tr><th>Image</th><th>Category</th><th>Reason</th></tr></thead><tbody><tr><td>images (10).jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (10).jpg</td><td>dust_haze</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (10).jpg</td><td>garbage_accumulation</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (10).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (14).jpg</td><td>garbage_accumulation</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (14).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (14).jpg</td><td>wastewater_sewerage</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (15).jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (15).jpg</td><td>dust_haze</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (15).jpg</td><td>garbage_accumulation</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (15).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (4).jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (4).jpg</td><td>garbage_accumulation</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (4).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (4).jpg</td><td>wastewater_sewerage</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (5).jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (5).jpg</td><td>dust_haze</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (8).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (9).jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (9).jpg</td><td>dust_haze</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (9).jpg</td><td>garbage_accumulation</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (9).jpg</td><td>water_contamination</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images (9).jpg</td><td>wastewater_sewerage</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images.jpg</td><td>smoke</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>images.jpg</td><td>dust_haze</td><td>Gemini HTTP 429: {
+  &quot;error&quot;: {
+    &quot;code&quot;: 429,
+    &quot;message&quot;: &quot;You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your curren</td></tr><tr><td>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</td><td>smoke</td><td>ValueError: Unable to decode image bytes.</td></tr><tr><td>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</td><td>dust_haze</td><td>ValueError: Unable to decode image bytes.</td></tr><tr><td>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</td><td>garbage_accumulation</td><td>ValueError: Unable to decode image bytes.</td></tr><tr><td>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</td><td>water_contamination</td><td>ValueError: Unable to decode image bytes.</td></tr><tr><td>ngt-issues-notice-to-up-after-report-on-water-contamination.avif</td><td>wastewater_sewerage</td><td>ValueError: Unable to decode image bytes.</td></tr></tbody></table>
+  </main>
+</body>
+</html>

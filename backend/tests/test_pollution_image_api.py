@@ -30,7 +30,7 @@ class TestPollutionImageAPI(unittest.TestCase):
         self.assertTrue(ok)
 
         response = client.post(
-            "/api/v1/image-analysis/analyze",
+            "/api/v1/image-analysis/analyze?use_gemini=false",
             files={"file": ("smoke.png", encoded.tobytes(), "image/png")},
         )
 

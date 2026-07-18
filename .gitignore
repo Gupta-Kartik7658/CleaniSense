@@ -111,3 +111,4 @@ backend/firebase-service-account.json
 *.json
 !backend/railway.json
 backend/firebase-service-account.json
+images

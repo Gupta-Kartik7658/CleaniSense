@@ -4,6 +4,32 @@ This file tracks the project development steps and structural changes performed 
 
 ## Completed Work
 
+### [2026-07-19] Gemini Image Severity Debugging Pass
+
+#### Image Severity Debug API
+- Made `POST /api/v1/image-analysis/score-debug` compact by default with a `score_summary` object for quick Swagger inspection.
+- Added `include_detector_details=false` default so OpenCV detector internals are hidden unless explicitly requested.
+- Surfaced sanitized Gemini skip/failure details in `gemini.skipped_reason`.
+- Changed final debug relevance so configured Gemini acts as the semantic verifier; OpenCV-only scores remain visible but do not certify image relevance when Gemini was required and failed.
+
+#### Severity Engine
+- Updated the complaint severity engine from additive weighted scoring to Gemini-gated hybrid scoring.
+- Complaint creation now stores survey/weather/density component values but keeps final severity at `0` in `pending_image_verification` mode until image verification runs.
+- Gemini is the semantic source of truth. If Gemini rejects the image, fails, or returns an unrelated type, contextual survey/weather/density inputs are suppressed.
+- OpenCV now acts as a corroborating score adjuster after Gemini validates image relevance.
+- Updated `/api/v1/image-analysis/analyze` and `/api/v1/image-analysis/score-debug` to expose the same image-evidence gate behavior.
+
+#### Gemini Vision Integration
+- Updated Gemini image verification to use `generateContent` for one-shot image plus prompt analysis.
+- Normalized Gemini model names to the documented `models/...` format while still allowing simple env values such as `gemini-3.1-flash-lite`.
+- Changed response parsing to prefer `generateContent` candidate text before falling back to Interactions-style `model_output` text and generic text extraction.
+- Documented the exact Gemini input payload intent and expected JSON output contract in the backend API docs.
+
+#### Deployment Investigation
+- Render memory pressure likely comes from startup-time native image processing imports: `app.main` imports the full API router, `image_analysis.py` imports `pollution_image_service`, and that imports OpenCV, NumPy, and scikit-image immediately.
+- Local package footprint shows large native dependencies: `cv2` about 112 MB, `scipy` about 109 MB, `numpy` about 31 MB plus OpenBLAS libraries, and `skimage` about 23 MB.
+- No memory fix was applied in this pass.
+
 ### [2026-07-08] SRS Modules 4-6 Completion Pass, Gemini Wiring, and Admin Role Controls
 
 #### Weather & Air Quality Module

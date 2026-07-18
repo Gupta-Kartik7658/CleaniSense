@@ -53,7 +53,7 @@ Handles the citizen complaints database, attachments, and resolution documents.
 | `complaintService.updateComplaint` | `PUT /complaints/{id}` | `routers/complaints.py` | `PUT /api/v1/complaints/{id}` | **CONNECTED** |
 | `complaintService.deleteComplaint` | `DELETE /complaints/{id}` | `routers/complaints.py` | `DELETE /api/v1/complaints/{id}` | **CONNECTED** |
 
-- *Note*: In our latest implementation, complaint create/update payloads include survey fields (`area_affected_sqm`, `population_affected`, `duration_hours`, `survey_data`). Attachments trigger category-aware OpenCV/Gemini image analysis, weather enrichment, severity recalculation, and hotspot refresh.
+- *Note*: In our latest implementation, complaint create/update payloads include survey fields (`area_affected_sqm`, `population_affected`, `duration_hours`, `survey_data`). Attachments trigger Gemini-gated hybrid image analysis, weather enrichment, severity recalculation, and hotspot refresh. OpenCV remains as corroborating visual evidence after Gemini validation.
 
 ---
 

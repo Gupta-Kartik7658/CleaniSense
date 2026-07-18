@@ -242,9 +242,9 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "title": "string",
     "status": "submitted",
     "severity": "normal | moderate | high | critical",
-    "severity_score": 67.08,
-    "image_severity_score": 61.2,
-    "ai_confidence_score": 75.8,
+    "severity_score": 0,
+    "image_severity_score": 0,
+    "ai_confidence_score": 0,
     "survey_score": 70.0,
     "weather_score": 44.14,
     "density_score": 25.0,
@@ -304,8 +304,8 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "survey_score": 70.0,
     "weather_score": 44.14,
     "density_score": 25.0,
-    "severity_breakdown": "JSON string containing SRS weights and component scores",
-    "image_analysis_summary": "JSON string containing OpenCV/Gemini image summary",
+    "severity_breakdown": "JSON string containing formula mode, component scores, context pressure, context gain, and image evidence gate",
+    "image_analysis_summary": "JSON string containing OpenCV/Gemini image summary and hybrid image evidence",
     "area_affected_sqm": 250,
     "population_affected": 80,
     "duration_hours": 48,
@@ -398,6 +398,45 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
     "file_name": "string",
     "file_size_bytes": 450123
   }
+  ```
+- **Image Side Effect**: For image files, the backend runs Gemini-gated hybrid image analysis, recalculates severity, and refreshes hotspot clustering.
+
+### 3.4.1 Severity Engine
+
+The active complaint severity engine uses a Gemini-gated hybrid relation instead of a plain additive weighted sum.
+
+- **Pending Image Verification**:
+  - Complaint creation records survey, weather/AQI, and nearby-density component scores.
+  - Final `severity_score`, `image_severity_score`, and `ai_confidence_score` remain `0` until image verification runs.
+  - `severity_breakdown.formula.mode` is `pending_image_verification`.
+- **Gemini Gate**:
+  - Gemini is the semantic source of truth for whether the image is relevant.
+  - A valid image requires Gemini `pollution_type != none`, confidence at least `35`, and a type compatible with the complaint category.
+  - If Gemini fails, rejects the image, or returns an unrelated type, final severity remains `0`; survey/weather/density are not allowed to raise the score.
+- **OpenCV Corroboration**:
+  - OpenCV extracts local visual features and raw detector scores.
+  - OpenCV adjusts the image score only after Gemini validates the image.
+  - OpenCV agreement strengthens the score; disagreement weakens it.
+- **Context Amplification**:
+  - Survey, weather/AQI, and nearby-density scores are stored as evidence.
+  - They only amplify remaining severity headroom after Gemini validates image evidence.
+- **Formula Summary**:
+  ```text
+  opencv_adjusted =
+    opencv_raw        if OpenCV agrees with Gemini
+    opencv_raw * 0.35 if OpenCV detects a different type
+    0                 if OpenCV detects nothing
+
+  hybrid_image_score =
+    (0.78 * gemini_severity + 0.22 * opencv_adjusted)
+    * (0.72 + 0.28 * gemini_confidence_ratio)
+    * (0.90 + 0.10 * agreement_factor)
+
+  context_pressure = 0.45 * survey + 0.35 * weather + 0.20 * nearby_density
+
+  final_severity =
+    hybrid_image_score
+    + (100 - hybrid_image_score) * (context_pressure / 100) * context_gain
   ```
 
 #### `GET /api/v1/complaints/{id}/resolution`
@@ -540,12 +579,92 @@ All failed requests (validations, unauthorized, exceptions) return standard HTTP
 
 ### 3.8 Image Analysis & Gemini
 
-#### `POST /api/v1/image-analysis/pollution`
+#### `POST /api/v1/image-analysis/analyze`
 - **Description**: Runs category-aware image analysis for uploaded complaint images.
 - **Query Parameters**:
   - `category`: `string` (optional category hint)
   - `use_gemini`: `bool` (default `true`)
 - **Supported Visual Categories**: `smoke`, `dust_haze`, `garbage_accumulation`, `water_contamination`, `wastewater_sewerage`.
+- **Multipart Form**:
+  - `file`: image upload
+
+#### `GET /api/v1/image-analysis/categories`
+- **Description**: Lists exact image analysis category values for Swagger/manual testing.
+- **Accepted `image_type` values**:
+  - `smoke`
+  - `dust_haze`
+  - `garbage_accumulation`
+  - `water_contamination`
+  - `wastewater_sewerage`
+  - `noise_pollution`
+  - `other`
+- **Example multipart call**:
+  ```bash
+  curl -X POST "http://localhost:8000/api/v1/image-analysis/score-debug" \
+    -F "image_type=garbage_accumulation" \
+    -F "use_gemini=true" \
+    -F "file=@sample.jpg;type=image/jpeg"
+  ```
+
+#### `POST /api/v1/image-analysis/score-debug`
+- **Description**: Swagger-friendly diagnostic upload endpoint that returns OpenCV and Gemini severity scores separately.
+- **Multipart Form**:
+  - `file`: JPEG/PNG/WebP image upload
+  - `image_type`: enum dropdown; use one of the values listed above
+  - `use_gemini`: bool, default `true`
+  - `include_detector_details`: bool, default `false`; set `true` only when you need the full OpenCV detector feature dump
+- **Response Highlights**:
+  - `score_summary`: compact comparison of requested type, relevance, OpenCV raw/gated score, Gemini raw/gated score, and final recommended image score
+  - `opencv.raw_severity_score`: raw classical CV score
+  - `opencv.gated_severity_score`: zeroed when OpenCV does not match the requested image type
+  - `opencv.detector_scores`: empty by default; populated only when `include_detector_details=true`
+  - `gemini.severity_score`: raw Gemini score when configured and returned
+  - `gemini.gated_severity_score`: zeroed/null when Gemini says the image is unrelated, low confidence, or a different type
+  - `gemini.skipped_reason`: sanitized configuration, HTTP, or parse failure reason when Gemini does not return usable JSON
+  - `image_relevant`: true only when image evidence matches the requested type
+  - `should_apply_weather_and_survey_scores`: false for irrelevant/random images
+- **Verifier Behavior**:
+  - When `use_gemini=true`, Gemini is treated as the semantic verifier for final relevance.
+  - OpenCV raw and gated scores are still returned for debugging, but OpenCV alone does not certify relevance if Gemini was requested and failed.
+  - Set `use_gemini=false` to inspect OpenCV-only behavior.
+- **Hybrid Severity Relation**:
+  - Gemini validates whether the uploaded image is relevant: `pollution_type != none`, confidence is at least 35%, and the type matches the selected/requested complaint type.
+  - If Gemini does not validate the image, the image score is `0` and survey/weather/density should not increase severity.
+  - If Gemini validates the image:
+    ```text
+    opencv_adjusted =
+      opencv_raw                  when OpenCV agrees with Gemini
+      opencv_raw * 0.35           when OpenCV detects a different type
+      0                           when OpenCV detects nothing
+
+    hybrid_image_score =
+      (0.78 * gemini_severity + 0.22 * opencv_adjusted)
+      * (0.72 + 0.28 * gemini_confidence_ratio)
+      * (0.90 + 0.10 * agreement_factor)
+    ```
+  - Full complaint severity uses the image score as the anchor and treats survey/weather/density as a context amplifier:
+    ```text
+    context_pressure = 0.45 * survey + 0.35 * weather + 0.20 * nearby_density
+
+    final_severity =
+      hybrid_image_score
+      + (100 - hybrid_image_score) * (context_pressure / 100) * context_gain
+    ```
+- **Gemini Request Contract**:
+  - Sends the uploaded image bytes as base64 with the upload MIME type.
+  - Sends a strict environmental verifier prompt plus compact OpenCV context: `category_hint`, `opencv_dominant_type`, `opencv_image_severity_score`, `opencv_pollution_detected`, and `opencv_supported_types`.
+  - Uses Gemini `generateContent` with `generationConfig.responseMimeType=application/json` and a strict response schema.
+- **Gemini Expected Output**:
+  ```json
+  {
+    "pollution_type": "smoke | dust_haze | garbage_accumulation | water_contamination | wastewater_sewerage | other | none",
+    "confidence_score": 0,
+    "severity_score": 0,
+    "severity_label": "normal | moderate | high | critical",
+    "environmental_description": "short factual description",
+    "verification_notes": "short reason for confidence"
+  }
+  ```
 - **Configuration**:
   - `GEMINI_API_KEY`
   - `GEMINI_MODEL` defaults to `gemini-3.1-flash-lite`
