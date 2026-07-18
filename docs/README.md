@@ -11,18 +11,22 @@ This folder contains the engineering requirements, software design specification
 5. [Frontend-Backend Integration Guide](frontend_backend_integration_prompt.md)
 6. [Municipal Dashboard API Guide](municipal_api_docs.md)
 7. [API Connectivity Audit](api_connection_audit.md)
+8. [Render Backend Memory Investigation](render_backend_memory_investigation.md)
 
 ## Latest Implementation Snapshot
 
-As of 2026-07-08, the implementation includes:
+As of 2026-07-19, the implementation includes:
 
-- Gemini-assisted image verification with server-side API key configuration.
-- SRS weighted severity scoring with image, Gemini confidence, survey, weather/AQI, and nearby complaint density components.
+- Gemini-gated image verification with server-side API key configuration.
+- Hybrid severity scoring where Gemini is the semantic source of truth, OpenCV is a corroborating signal, and survey/weather/density amplify only after Gemini verifies image evidence.
 - Open-Meteo weather and air-quality ingestion without an API key.
 - Generated hotspot clusters persisted from unresolved complaint density, with critical hotspot notifications.
 - Superadmin-only role management by email.
 - Citizen complaint survey fields for area affected, people affected, duration, and severity hints.
 - Firebase password reset UI.
 - Deployment-ready external dependencies: PostgreSQL `DATABASE_URL`, Supabase/Firebase object storage, Firebase credentials from env, and DB-backed admin settings.
+- Hybrid image severity evidence reports:
+  - [Markdown matrix](hybrid_image_severity_matrix.md)
+  - [HTML matrix](hybrid_image_severity_matrix.html)
 
 The Prediction Engine remains intentionally deferred.

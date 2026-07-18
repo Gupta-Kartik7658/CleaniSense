@@ -1272,7 +1272,7 @@ This document started as an implementation plan. The following items now reflect
 - `models/weather_observation.py`: stores complaint-linked weather and air-quality observations.
 - `services/weather_service.py`: fetches Open-Meteo weather forecast and air-quality data.
 - `routers/weather.py`: exposes current coordinate weather/AQI and complaint weather refresh/read endpoints.
-- `services/severity_service.py`: calculates the SRS weighted score using image, Gemini confidence, survey, weather, and density components.
+- `services/severity_service.py`: calculates Gemini-gated hybrid severity. Gemini verifies image relevance, OpenCV corroborates visual evidence, and survey/weather/density amplify only after valid image evidence exists.
 - `services/hotspot_service.py`: generates persisted hotspot clusters from unresolved complaints and notifies municipal authorities for critical clusters.
 - `routers/hotspots.py`: includes admin-only `POST /hotspots/refresh`.
 - `routers/admin.py`: includes superadmin role changes by email and returns severity percentages/component data for incidents.
@@ -1302,9 +1302,9 @@ HOTSPOT_MIN_COMPLAINTS=2
 |---|---|
 | Authentication | Implemented with Firebase login/logout/me and frontend reset-password page |
 | Complaint Management | Implemented with CRUD, attachments, survey fields, history, and details |
-| Image Analysis Engine | Implemented with OpenCV-first analysis and optional Gemini verification |
+| Image Analysis Engine | Implemented with Gemini-gated hybrid analysis; OpenCV remains as a corroborating visual signal |
 | Weather Service | Implemented using Open-Meteo weather and air-quality APIs |
-| Severity Calculator | Implemented and persisted on complaints |
+| Severity Calculator | Implemented and persisted on complaints using pending-verification and Gemini-gated hybrid modes |
 | Hotspot Detection | Implemented with persisted complaint clusters and critical notifications |
 | Prediction Engine | Deferred intentionally |
 | Dashboard | Implemented for citizen/admin/municipal views, with prediction widgets still stubbed |

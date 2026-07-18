@@ -15,6 +15,7 @@ class SeverityService:
     SURVEY_WEIGHT = 0.20
     WEATHER_WEIGHT = 0.15
     DENSITY_WEIGHT = 0.10
+    GEMINI_MIN_CONFIDENCE = 35.0
 
     def calculate_and_apply(
         self,
@@ -22,29 +23,70 @@ class SeverityService:
         complaint: Complaint,
         image_analysis: Optional[Dict[str, Any]] = None,
     ) -> Complaint:
-        image_score = self._image_score(complaint, image_analysis)
-        ai_score = self._ai_score(complaint, image_analysis)
         survey_score = self._survey_score(complaint)
         weather_score = self._weather_score(db, complaint)
         density_score = self._density_score(db, complaint)
 
-        severity_score = round(
-            self.IMAGE_WEIGHT * image_score
-            + self.AI_WEIGHT * ai_score
-            + self.SURVEY_WEIGHT * survey_score
-            + self.WEATHER_WEIGHT * weather_score
-            + self.DENSITY_WEIGHT * density_score,
-            2,
-        )
+        evidence: Dict[str, Any] = {}
+        if image_analysis:
+            evidence = self.evaluate_image_evidence(
+                image_analysis=image_analysis,
+                category_name=complaint.category.name if complaint.category else None,
+            )
+            image_score = float(evidence["hybrid_image_score"])
+            ai_score = float(evidence["gemini_confidence_score"])
+            context_pressure = self._context_pressure(
+                survey_score=survey_score,
+                weather_score=weather_score,
+                density_score=density_score,
+            )
+
+            if evidence["image_relevant"]:
+                context_gain = (
+                    0.25
+                    + 0.55 * float(evidence["gemini_confidence_ratio"])
+                    + 0.20 * float(evidence["agreement_factor"])
+                )
+                severity_score = round(
+                    image_score
+                    + (100.0 - image_score)
+                    * (context_pressure / 100.0)
+                    * context_gain,
+                    2,
+                )
+            else:
+                context_gain = 0.0
+                severity_score = 0.0
+        else:
+            image_score = 0.0
+            ai_score = 0.0
+            context_pressure = self._context_pressure(
+                survey_score=survey_score,
+                weather_score=weather_score,
+                density_score=density_score,
+            )
+            context_gain = 0.0
+            severity_score = 0.0
+            evidence = {
+                "image_relevant": False,
+                "hybrid_image_score": 0.0,
+                "gate_reason": (
+                    "Image verification is pending. Survey, weather, and density "
+                    "components are recorded but suppressed until Gemini verifies image evidence."
+                ),
+            }
         severity_label = self._severity_label(severity_score)
 
         breakdown = {
             "formula": {
-                "image_processing": self.IMAGE_WEIGHT,
-                "ai_confidence": self.AI_WEIGHT,
-                "survey": self.SURVEY_WEIGHT,
-                "weather": self.WEATHER_WEIGHT,
-                "complaint_density": self.DENSITY_WEIGHT,
+                "mode": "gemini_gated_hybrid" if image_analysis else "pending_image_verification",
+                "description": (
+                    "Gemini verifies image relevance. OpenCV adjusts the image score as a "
+                    "corroborating signal. Survey, weather, and density amplify only the "
+                    "remaining severity headroom after valid image evidence exists."
+                    if image_analysis
+                    else "Context components are stored for audit but do not raise severity until Gemini verifies image evidence."
+                ),
             },
             "components": {
                 "image_processing": round(image_score, 2),
@@ -52,7 +94,10 @@ class SeverityService:
                 "survey": round(survey_score, 2),
                 "weather": round(weather_score, 2),
                 "complaint_density": round(density_score, 2),
+                "context_pressure": round(context_pressure, 2),
+                "context_gain": round(context_gain, 4),
             },
+            "image_evidence": evidence,
         }
 
         complaint.severity_score = severity_score
@@ -74,6 +119,7 @@ class SeverityService:
                     "severity_label": image_analysis.get("severity_label"),
                     "ai_confidence_score": image_analysis.get("ai_confidence_score"),
                     "gemini_analysis": gemini_analysis,
+                    "image_evidence": evidence,
                     "supported_pollution_types": image_analysis.get("metadata", {}).get(
                         "supported_pollution_types",
                         [],
@@ -85,6 +131,77 @@ class SeverityService:
         db.commit()
         db.refresh(complaint)
         return complaint
+
+    def evaluate_image_evidence(
+        self,
+        image_analysis: Dict[str, Any],
+        category_name: Optional[str] = None,
+        requested_type: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        gemini_analysis = image_analysis.get("gemini_analysis") or {}
+        gemini_type = str(gemini_analysis.get("pollution_type") or "none").lower()
+        gemini_confidence = self._clip(float(gemini_analysis.get("confidence_score") or 0.0))
+        gemini_severity = self._clip(float(gemini_analysis.get("severity_score") or 0.0))
+        gemini_confidence_ratio = gemini_confidence / 100.0
+
+        opencv_detected = bool(image_analysis.get("pollution_detected"))
+        opencv_type = str(image_analysis.get("dominant_type") or "low_signal").lower()
+        opencv_score = self._clip(float(image_analysis.get("severity_score") or 0.0))
+
+        expected_types = self._expected_pollution_types(category_name, requested_type)
+        gemini_type_allowed = (
+            not expected_types
+            or gemini_type in expected_types
+            or "other" in expected_types
+        )
+        gemini_valid = bool(
+            gemini_analysis
+            and gemini_type != "none"
+            and gemini_confidence >= self.GEMINI_MIN_CONFIDENCE
+            and gemini_type_allowed
+        )
+
+        opencv_agrees = bool(opencv_detected and opencv_type == gemini_type)
+        if opencv_agrees:
+            agreement_factor = 1.0
+            opencv_adjusted_score = opencv_score
+        elif opencv_detected:
+            agreement_factor = 0.60
+            opencv_adjusted_score = opencv_score * 0.35
+        else:
+            agreement_factor = 0.40
+            opencv_adjusted_score = 0.0
+
+        if gemini_valid:
+            hybrid_score = (
+                (0.78 * gemini_severity + 0.22 * opencv_adjusted_score)
+                * (0.72 + 0.28 * gemini_confidence_ratio)
+                * (0.90 + 0.10 * agreement_factor)
+            )
+            hybrid_score = self._clip(hybrid_score)
+        else:
+            hybrid_score = 0.0
+
+        return {
+            "image_relevant": gemini_valid,
+            "expected_types": expected_types,
+            "gemini_pollution_type": gemini_type,
+            "gemini_confidence_score": round(gemini_confidence, 2),
+            "gemini_confidence_ratio": round(gemini_confidence_ratio, 4),
+            "gemini_severity_score": round(gemini_severity, 2),
+            "opencv_pollution_detected": opencv_detected,
+            "opencv_dominant_type": opencv_type,
+            "opencv_raw_score": round(opencv_score, 2),
+            "opencv_agrees_with_gemini": opencv_agrees,
+            "opencv_adjusted_score": round(opencv_adjusted_score, 2),
+            "agreement_factor": round(agreement_factor, 4),
+            "hybrid_image_score": round(hybrid_score, 2),
+            "gate_reason": (
+                "Gemini verified matching pollution evidence."
+                if gemini_valid
+                else "Gemini did not verify matching pollution evidence; contextual severity components are suppressed."
+            ),
+        }
 
     def _image_score(
         self,
@@ -230,6 +347,40 @@ class SeverityService:
                 nearby_count += 1
 
         return self._clip(nearby_count * 25.0)
+
+    def _context_pressure(
+        self,
+        survey_score: float,
+        weather_score: float,
+        density_score: float,
+    ) -> float:
+        return self._clip(
+            0.45 * survey_score
+            + 0.35 * weather_score
+            + 0.20 * density_score
+        )
+
+    def _expected_pollution_types(
+        self,
+        category_name: Optional[str],
+        requested_type: Optional[str],
+    ) -> list[str]:
+        if requested_type:
+            normalized_requested = requested_type.lower()
+            if normalized_requested == "other":
+                return ["other"]
+            return [normalized_requested]
+
+        normalized_category = (category_name or "").lower()
+        if any(token in normalized_category for token in ["sewer", "sewage", "wastewater", "drain"]):
+            return ["wastewater_sewerage", "water_contamination"]
+        if any(token in normalized_category for token in ["water", "contamination", "chemical"]):
+            return ["water_contamination", "wastewater_sewerage"]
+        if any(token in normalized_category for token in ["waste", "garbage", "dump", "land", "solid"]):
+            return ["garbage_accumulation"]
+        if any(token in normalized_category for token in ["air", "smoke", "dust", "aqi", "quality", "burning"]):
+            return ["smoke", "dust_haze"]
+        return []
 
     def _severity_label(self, score: float) -> str:
         if score < 25.0:

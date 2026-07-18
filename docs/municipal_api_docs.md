@@ -9,6 +9,7 @@ This document provides a comprehensive integration guide for frontend developers
 Municipal dashboards now consume generated severity and hotspot data:
 
 - Complaint responses expose `severity_score`, `image_severity_score`, `ai_confidence_score`, `survey_score`, `weather_score`, `density_score`, and `severity_breakdown`.
+- Complaint severity is Gemini-gated: survey/weather/density values are visible for audit, but final severity remains `0` until Gemini verifies image evidence. OpenCV is used as corroborating visual evidence after Gemini validation.
 - Hotspots are generated from unresolved complaint clusters and persisted in the `hotspots` table.
 - `POST /api/v1/hotspots/refresh` rebuilds clusters with configurable `radius_meters` and `min_complaints`.
 - Critical hotspots create deduplicated `CRITICAL_HOTSPOT` notifications for municipality staff and superadmins.
