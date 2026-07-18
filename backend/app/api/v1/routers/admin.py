@@ -17,6 +17,7 @@ from app.models.weather_observation import WeatherObservation
 from app.models.system_setting import SystemSetting
 from app.models.complaint_category import ComplaintCategory as DBComplaintCategory
 from app.services.hotspot_service import hotspot_service
+from app.services.storage_service import storage_service
 from app.utils.response import standard_response, StandardResponseModel
 from app.utils.pagination import PaginatedResponseModel
 
@@ -28,7 +29,6 @@ class UserRoleUpdateRequest(BaseModel):
     role: UserRole
 
 def map_db_user_to_frontend(user: DBUser, db: Session) -> dict:
-    # Count complaints submitted by this user
     reports_count = db.query(func.count(DBComplaint.id)).filter(
         DBComplaint.user_id == user.id,
         DBComplaint.is_deleted == False
@@ -41,10 +41,10 @@ def map_db_user_to_frontend(user: DBUser, db: Session) -> dict:
         "role": user.role,
         "status": "active" if user.is_active else "suspended",
         "reportsCount": reports_count,
-        "joinedAt": user.created_at.strftime("%Y-%m-%d"),
-        "lastActive": user.updated_at.strftime("%Y-%m-%d %H:%M:%S"),
-        "avatar": user.profile_picture,
-        "phone": "+91 98765 43210",
+        "joinedAt": user.created_at.strftime("%Y-%m-%d") if user.created_at else "",
+        "lastActive": user.updated_at.strftime("%Y-%m-%d %H:%M:%S") if user.updated_at else "",
+        "avatar": getattr(user, "avatar_url", None) or getattr(user, "profile_picture", None),
+        "phone": getattr(user, "phone_number", None) or "+91 98765 43210",
         "city": "Mumbai"
     }
 
@@ -87,7 +87,14 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
             "critical": 88.0,
         }.get(db_severity, 45.0)
 
-    media_urls = [att.public_url for att in complaint.attachments if att.public_url]
+    # Generate fresh signed URLs dynamically for all attachments so expired Supabase tokens never break images
+    media_urls = []
+    for att in complaint.attachments:
+        fresh = storage_service.get_public_url(att)
+        if fresh:
+            media_urls.append(fresh)
+        elif att.public_url:
+            media_urls.append(att.public_url)
 
     return {
         "id": str(complaint.id),
@@ -281,7 +288,12 @@ def get_admin_incidents(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    query = db.query(DBComplaint).filter(DBComplaint.is_deleted == False)
+    from sqlalchemy.orm import joinedload
+    query = db.query(DBComplaint).options(
+        joinedload(DBComplaint.user),
+        joinedload(DBComplaint.category),
+        joinedload(DBComplaint.attachments)
+    ).filter(DBComplaint.is_deleted == False)
     
     if status_filter and status_filter != "all":
         # map frontend status to database status
@@ -350,16 +362,54 @@ def update_incident_status(
         complaint.status = "rejected"
     elif new_status == "investigating":
         complaint.status = "in_progress"
+    elif new_status == "approved":
+        complaint.status = "municipality_accepted"
+        # Assign a default active municipality if none exists to resolve Pending Assignment
+        if not complaint.municipality_id:
+            from app.models.municipality import Municipality
+            default_mun = db.query(Municipality).filter(Municipality.is_active == True).first()
+            if default_mun:
+                complaint.municipality_id = default_mun.id
 
     db.add(complaint)
     db.commit()
     db.refresh(complaint)
+
+    # Log timeline history and send notification
+    from app.services.complaint_service import complaint_service
+    remarks = notes or f"Complaint updated to {new_status} by administrator"
+    complaint_service._add_status_history_entry(
+        db,
+        complaint.id,
+        complaint.status,
+        remarks,
+        current_user.id
+    )
+    complaint_service._dispatch_notification_hook(db, complaint, complaint.status.upper())
 
     incident = map_db_complaint_to_frontend(complaint)
     return standard_response(
         success=True,
         message="Incident status updated successfully",
         data=incident
+    )
+
+@router.delete("/incidents/{incident_id}", response_model=StandardResponseModel)
+def delete_admin_incident(
+    incident_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: DBUser = Depends(require_admin)
+):
+    complaint = db.query(DBComplaint).filter(DBComplaint.id == incident_id).first()
+    if not complaint:
+        raise HTTPException(status_code=456, detail="Incident not found")
+    
+    db.delete(complaint)
+    db.commit()
+    
+    return standard_response(
+        success=True,
+        message="Incident deleted and wiped from database successfully"
     )
 
 @router.post("/incidents/{incident_id}/assign", response_model=StandardResponseModel)
@@ -390,32 +440,73 @@ def get_admin_hotspots(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
+    from app.services.complaint_cluster_service import complaint_cluster_service
+    map_clusters = complaint_cluster_service.get_all_complaint_map(db)
+    
     hotspot_service.refresh_hotspots(db)
     db_hotspots = db.query(DBHotspot).filter(DBHotspot.is_active == True).all()
     hotspots_list = []
 
-    for h in db_hotspots:
+    for index, h in enumerate(map_clusters.get("hotspots", [])):
+        complaints_in_cluster = h.get("complaints", [])
+        loc_name = complaints_in_cluster[0].get("location_name", "Local Area") if complaints_in_cluster else "Local Area"
+        cat_name = complaints_in_cluster[0].get("category_name", "General") if complaints_in_cluster else "General"
+        
+        city = "Local Area"
+        if loc_name:
+            parts = [p.strip() for p in loc_name.split(",") if p.strip()]
+            city = parts[-1] if len(parts) > 1 else parts[0]
+
         hotspots_list.append({
-            "id": str(h.id),
+            "id": str(h["id"]),
             "center": {
-                "latitude": h.latitude,
-                "longitude": h.longitude,
-                "city": "Mumbai",
-                "district": "",
+                "latitude": float(h["latitude"]),
+                "longitude": float(h["longitude"]),
+                "city": city,
+                "district": loc_name,
                 "state": ""
             },
-            "radius": h.radius_meters or 0,
-            "incidentCount": h.reports_count,
-            "averageSeverity": h.severity_score or 0,
-            "dominantType": h.dominant_category or "Environmental",
-            "trend": h.trend or "stable",
-            "createdAt": h.created_at.isoformat()
+            "radius": float(h.get("radius_meters", 50.0)),
+            "incidentCount": int(h.get("count", 2)),
+            "averageSeverity": 4.2 if int(h.get("count", 2)) >= 3 else 3.2,
+            "dominantType": cat_name,
+            "trend": "growing" if int(h.get("count", 2)) >= 3 else "stable",
+            "createdAt": datetime.utcnow().isoformat(),
+            "complaints": complaints_in_cluster
         })
+
+    for h in db_hotspots:
+        already_added = any(
+            abs(item["center"]["latitude"] - h.latitude) < 0.001 and abs(item["center"]["longitude"] - h.longitude) < 0.001
+            for item in hotspots_list
+        )
+        if not already_added:
+            hotspots_list.append({
+                "id": str(h.id),
+                "center": {
+                    "latitude": float(h.latitude),
+                    "longitude": float(h.longitude),
+                    "city": h.title or "Municipal Hotspot",
+                    "district": h.description or "",
+                    "state": ""
+                },
+                "radius": float(h.radius_meters or 50.0),
+                "incidentCount": int(h.reports_count or 1),
+                "averageSeverity": float(h.severity_score or 3.5),
+                "dominantType": h.dominant_category or "General",
+                "trend": h.trend or "stable",
+                "createdAt": h.created_at.isoformat(),
+                "complaints": []
+            })
         
     return standard_response(
         success=True,
         message="Hotspot clusters retrieved successfully",
-        data=hotspots_list
+        data={
+            "hotspots": hotspots_list,
+            "singles": map_clusters.get("singles", []),
+            "total_complaints": map_clusters.get("total_complaints", len(hotspots_list))
+        }
     )
 
 @router.get("/predictions/aqi", response_model=StandardResponseModel)
@@ -475,7 +566,8 @@ DEFAULT_SYSTEM_SETTINGS = {
         "timezone": "Asia/Kolkata",
         "language": "en",
         "dateFormat": "DD/MM/YYYY",
-        "maintenanceMode": False
+        "maintenanceMode": False,
+        "autoForwardToMunicipality": False
     },
     "notifications": {
         "emailAlerts": True,

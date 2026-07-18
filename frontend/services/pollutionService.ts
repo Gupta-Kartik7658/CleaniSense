@@ -158,4 +158,8 @@ export class PollutionService {
     const response = await api.get('/admin/settings/backup', { responseType: 'blob' });
     return response as any;
   }
+
+  static async deleteIncident(incidentId: string): Promise<void> {
+    await api.delete(`/admin/incidents/${incidentId}`);
+  }
 }

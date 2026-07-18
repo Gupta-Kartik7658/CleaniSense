@@ -19,8 +19,8 @@ def paginate(query, page: int, page_size: int) -> Dict[str, Any]:
         page = 1
     if page_size < 1:
         page_size = 20
-    elif page_size > 100:
-        page_size = 100
+    elif page_size > 500:
+        page_size = 500
 
     total = query.count()
     total_pages = math.ceil(total / page_size) if total > 0 else 0

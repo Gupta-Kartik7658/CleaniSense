@@ -20,10 +20,18 @@ logger = logging.getLogger("uvicorn")
 
 # Allowed state machine transitions mapping
 ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
-    ComplaintStatus.DRAFT.value: [ComplaintStatus.SUBMITTED.value],
+    ComplaintStatus.DRAFT.value: [
+        ComplaintStatus.SUBMITTED.value,
+        ComplaintStatus.AI_VERIFICATION_IN_PROGRESS.value
+    ],
     ComplaintStatus.SUBMITTED.value: [
         ComplaintStatus.AI_VALIDATION_COMPLETED.value,
         ComplaintStatus.REJECTED.value
+    ],
+    ComplaintStatus.AI_VERIFICATION_IN_PROGRESS.value: [
+        ComplaintStatus.AI_VALIDATION_COMPLETED.value,
+        ComplaintStatus.REJECTED.value,
+        ComplaintStatus.MUNICIPALITY_ACCEPTED.value
     ],
     ComplaintStatus.AI_VALIDATION_COMPLETED.value: [
         ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
@@ -120,10 +128,11 @@ class ComplaintService:
         from app.services.pollution_image_service import pollution_image_service
 
         category_name = complaint.category.name if complaint.category else None
-        analysis = pollution_image_service.detect_pollution(
+        analysis_result = pollution_image_service.analyze(
             image_content,
             category_name=category_name,
         )
+        analysis = analysis_result.to_dict()
         from app.services.gemini_vision_service import gemini_vision_service
 
         gemini_analysis = gemini_vision_service.analyze_image(
@@ -630,5 +639,134 @@ class ComplaintService:
         Retrieves the 10 most recent status changes in the municipality.
         """
         return complaint_repository.get_recent_activity(db, municipality_id, limit=10)
+
+def verify_complaint_pipeline(complaint_id: uuid.UUID, raw_files: list, user_id: uuid.UUID):
+    """
+    Asynchronous background task to enrich weather, run image analysis,
+    recalculate severity score, refresh hotspots, transition status, and notify the user.
+    """
+    from app.database.session import SessionLocal
+    from app.services.weather_service import weather_service
+    from app.services.hotspot_service import hotspot_service
+    from app.services.severity_service import severity_service
+    from app.api.v1.routers.admin import load_system_settings
+    from app.services.storage_service import storage_service
+    from app.models.complaint import Complaint
+    from app.models.municipality import Municipality
+    
+    db = SessionLocal()
+    try:
+        logger.info(f"[verify_complaint_pipeline] Starting verification for complaint={complaint_id}")
+        complaint = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+        if not complaint:
+            logger.error(f"[verify_complaint_pipeline] Complaint not found: {complaint_id}")
+            return
+            
+        # 0. Upload files and populate image_data_list in the background thread
+        image_data_list = []
+        for filename, content, content_type in raw_files:
+            try:
+                logger.info(f"[verify_complaint_pipeline] Uploading file={filename} to storage")
+                attachment = storage_service.upload_attachment(
+                    db=db,
+                    complaint_id=complaint_id,
+                    file_content=content,
+                    filename=filename,
+                    content_type=content_type or "image/jpeg",
+                    file_size_bytes=len(content)
+                )
+                if attachment.file_type == "image":
+                    image_data_list.append((attachment.id, content, content_type or "image/jpeg"))
+            except Exception as e:
+                logger.exception(f"[verify_complaint_pipeline] File upload failed for {filename}: {e}")
+            
+        # Refresh local DB session copy of complaint to catch relations
+        db.refresh(complaint)
+
+        # 1. Weather enrichment
+        try:
+            weather_service.enrich_complaint(db, complaint)
+            logger.info(f"[verify_complaint_pipeline] Weather enriched for complaint={complaint_id}")
+        except Exception as e:
+            logger.exception(f"[verify_complaint_pipeline] Weather enrichment failed: {e}")
+            
+        # 2. Image analysis (pollution & Gemini vision)
+        for attachment_id, image_content, content_type in image_data_list:
+            try:
+                logger.info(f"[verify_complaint_pipeline] Analyzing image attachment={attachment_id}")
+                complaint = complaint_service.apply_image_analysis_to_complaint(
+                    db=db,
+                    complaint=complaint,
+                    image_content=image_content,
+                    content_type=content_type
+                )
+            except Exception as e:
+                logger.exception(f"[verify_complaint_pipeline] Image analysis failed for attachment={attachment_id}: {e}")
+                
+        # 3. Fallback severity calculation if no images analyzed
+        if not image_data_list:
+            try:
+                complaint = severity_service.calculate_and_apply(db, complaint)
+                logger.info(f"[verify_complaint_pipeline] Baseline severity calculated for complaint={complaint_id}")
+            except Exception as e:
+                logger.exception(f"[verify_complaint_pipeline] Baseline severity calculation failed: {e}")
+                
+        # 4. Refresh hotspots
+        try:
+            hotspot_service.refresh_for_complaint(db, complaint)
+            logger.info(f"[verify_complaint_pipeline] Hotspots refreshed for complaint={complaint_id}")
+        except Exception as e:
+            logger.exception(f"[verify_complaint_pipeline] Hotspot refresh failed: {e}")
+            
+        # 5. Transition to AI_VALIDATION_COMPLETED
+        complaint.status = ComplaintStatus.AI_VALIDATION_COMPLETED.value
+        complaint.updated_at = datetime.now(timezone.utc)
+        db.add(complaint)
+        db.commit()
+        
+        complaint_service._add_status_history_entry(
+            db, 
+            complaint.id, 
+            ComplaintStatus.AI_VALIDATION_COMPLETED.value, 
+            "AI verification completed successfully", 
+            user_id
+        )
+        complaint_service._dispatch_notification_hook(db, complaint, "AI_VALIDATION_COMPLETED")
+        logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} transitioned to AI_VALIDATION_COMPLETED")
+        
+        # 6. Check auto-forward toggle
+        settings = load_system_settings(db)
+        auto_forward = settings.get("general", {}).get("autoForwardToMunicipality", False)
+        
+        if auto_forward:
+            logger.info(f"[verify_complaint_pipeline] Auto-forward enabled, forwarding complaint={complaint_id}")
+            # Assign a default active municipality if none exists
+            if not complaint.municipality_id:
+                default_mun = db.query(Municipality).filter(Municipality.is_active == True).first()
+                if default_mun:
+                    complaint.municipality_id = default_mun.id
+                    db.add(complaint)
+                    db.commit()
+                    logger.info(f"[verify_complaint_pipeline] Assigned default municipality={default_mun.name} to complaint={complaint_id}")
+            
+            complaint.status = ComplaintStatus.MUNICIPALITY_ACCEPTED.value
+            complaint.updated_at = datetime.now(timezone.utc)
+            db.add(complaint)
+            db.commit()
+            
+            complaint_service._add_status_history_entry(
+                db,
+                complaint.id,
+                ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
+                "Complaint automatically forwarded to municipality",
+                user_id
+            )
+            complaint_service._dispatch_notification_hook(db, complaint, "MUNICIPALITY_ACCEPTED")
+            logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} auto-forwarded to municipality")
+            
+    except Exception as e:
+        logger.exception(f"[verify_complaint_pipeline] Error in background verification: {e}")
+    finally:
+        db.close()
 
 complaint_service = ComplaintService()

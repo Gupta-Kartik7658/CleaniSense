@@ -10,6 +10,7 @@ import { useTranslationUtility } from "@/providers/TranslationProvider";
 import { useTranslations } from "next-intl";
 
 import { useProfile } from "@/hooks/useProfile";
+import { notificationService } from "@/services/notification";
 
 export function PortalLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout } = useAuth();
@@ -25,6 +26,57 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
   const [notifEnabled, setNotifEnabled] = useState(true);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [lastNotificationId, setLastNotificationId] = useState<string | null>(null);
+  const [showVerificationToast, setShowVerificationToast] = useState(false);
+  const [verificationToastMessage, setVerificationToastMessage] = useState("");
+
+  useEffect(() => {
+    if (!user) return;
+    
+    // Initialize lastNotificationId on mount
+    const initNotifications = async () => {
+      try {
+        const res = await notificationService.getNotifications(false, 1, 1);
+        if (res && res.items && res.items.length > 0) {
+          setLastNotificationId(res.items[0].id);
+        }
+      } catch (err) {
+        console.error("Failed to initialize notifications check:", err);
+      }
+    };
+    initNotifications();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    
+    const pollNotifications = async () => {
+      try {
+        const res = await notificationService.getNotifications(false, 1, 1);
+        if (res && res.items && res.items.length > 0) {
+          const latest = res.items[0];
+          // If we have a new notification that we haven't processed yet
+          if (lastNotificationId !== null && latest.id !== lastNotificationId) {
+            setLastNotificationId(latest.id);
+            
+            // Check if it is AI_VALIDATION_COMPLETED or MUNICIPALITY_ACCEPTED
+            if (latest.type === "AI_VALIDATION_COMPLETED" || latest.type === "MUNICIPALITY_ACCEPTED") {
+              setVerificationToastMessage(`${latest.title}: ${latest.message}`);
+              setShowVerificationToast(true);
+            }
+          } else if (lastNotificationId === null) {
+            setLastNotificationId(latest.id);
+          }
+        }
+      } catch (err) {
+        console.error("Error polling notifications:", err);
+      }
+    };
+
+    const interval = setInterval(pollNotifications, 5000); // Poll every 5 seconds
+    return () => clearInterval(interval);
+  }, [user, lastNotificationId]);
 
   useEffect(() => {
     if (preferences) {
@@ -289,6 +341,19 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
 
+                  {/* Admin Panel Link */}
+                  {user && (user.role === 'super_admin' || user.role === 'municipality_admin' || user.role === 'admin') && (
+                    <div className="border-t border-slate-100 dark:border-slate-800 pt-2 px-2">
+                      <Link
+                        href="/admin"
+                        onClick={() => setDropdownOpen(false)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-650 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <span>🔒</span> Admin Panel
+                      </Link>
+                    </div>
+                  )}
+
                   {/* Account Settings Link */}
                   <div className="border-t border-slate-100 dark:border-slate-800 pt-2 px-2">
                     <Link
@@ -299,18 +364,6 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
                       <span>⚙</span> {tCommon("accountSettings")}
                     </Link>
                   </div>
-
-                  {user.role === 'super_admin' && (
-                    <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 px-2">
-                      <Link
-                        href="/admin"
-                        onClick={() => setDropdownOpen(false)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-650 dark:text-emerald-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <span>🔒</span> Admin Panel
-                      </Link>
-                    </div>
-                  )}
 
                   {/* Sign Out Button */}
                   <div className="border-t border-slate-100 dark:border-slate-800 mt-2 pt-2 px-2">
@@ -338,6 +391,38 @@ export function PortalLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 max-w-[1400px] w-full mx-auto px-6 md:px-8 py-8">
         {children}
       </main>
+
+      {/* Verification Toast Popup */}
+      <div className={`fixed bottom-6 right-6 z-50 max-w-sm bg-white/95 dark:bg-slate-900/95 border border-emerald-500/30 shadow-2xl p-4 rounded-2xl flex items-start gap-3.5 transition-all duration-500 ease-out transform ${
+        showVerificationToast ? "translate-x-0 opacity-100 scale-100" : "translate-x-12 opacity-0 scale-95 pointer-events-none"
+      }`}>
+        <div className="w-9 h-9 bg-emerald-100 dark:bg-emerald-950/50 rounded-xl flex items-center justify-center text-emerald-650 dark:text-emerald-400 font-bold shrink-0 shadow-inner">
+          🤖
+        </div>
+        <div className="flex-1 space-y-1 text-left">
+          <h4 className="text-xs font-extrabold text-slate-900 dark:text-white">System Verification Update</h4>
+          <p className="text-[11px] text-slate-650 dark:text-slate-350 leading-relaxed font-semibold">
+            {verificationToastMessage}
+          </p>
+          <div className="pt-2 flex gap-3 border-t border-slate-100 dark:border-slate-800/60 mt-1.5">
+            <button
+              onClick={() => {
+                setShowVerificationToast(false);
+                window.location.reload();
+              }}
+              className="text-[10px] font-extrabold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 cursor-pointer"
+            >
+              Refresh Page
+            </button>
+            <button
+              onClick={() => setShowVerificationToast(false)}
+              className="text-[10px] font-bold text-slate-400 hover:text-slate-650 cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      </div>
 
     </div>
   );

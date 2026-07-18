@@ -28,7 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const syncSessionRef = useRef<Promise<void> | null>(null);
 
-  const syncSessionWithBackend = async (firebaseUser: FirebaseUser) => {
+  const syncSessionWithBackend = async (firebaseUser: FirebaseUser, requestedRole?: string) => {
     if (syncSessionRef.current) {
       await syncSessionRef.current;
       return;
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = await firebaseUser.getIdToken();
       document.cookie = `cleanisense_token=${token}; path=/; max-age=3600; SameSite=Lax; Secure`;
 
-      const backendUser = await authService.loginWithFirebase(token);
+      const backendUser = await authService.loginWithFirebase(token, requestedRole);
       setUser(backendUser);
       const profile = await profileService.getProfile();
       setProfileData(profile);
@@ -89,8 +89,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      await syncSessionWithBackend(result.user);
-      router.push("/dashboard");
+      
+      const token = await result.user.getIdToken();
+      document.cookie = `cleanisense_token=${token}; path=/; max-age=3600; SameSite=Lax; Secure`;
+
+      const backendUser = await authService.loginWithFirebase(token, requestedRole);
+      setUser(backendUser);
+      const profile = await profileService.getProfile();
+      setProfileData(profile);
+      
+      if (backendUser && (
+        backendUser.role === 'admin' ||
+        backendUser.role === 'super_admin' ||
+        backendUser.role === 'municipality_admin' ||
+        backendUser.role === 'municipality_officer'
+      )) {
+        router.push("/admin");
+      } else {
+        router.push("/dashboard");
+      }
     } catch (error) {
       console.error("Authentication popup login failed:", error);
       throw error;

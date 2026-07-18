@@ -23,6 +23,7 @@ import {
 interface ComplaintLeafletMapProps {
   mapData?: ComplaintMapData;
   loading?: boolean;
+  height?: string;
 }
 
 function statusColor(status: string) {
@@ -49,28 +50,27 @@ function FitBounds({ points }: { points: [number, number][] }) {
 }
 
 function SingleMarker({ point }: { point: ComplaintMapPoint }) {
-  const color = statusColor(point.status);
   return (
     <CircleMarker
       center={[point.latitude, point.longitude]}
-      radius={9}
+      radius={7}
       pathOptions={{
         color: "#ffffff",
-        weight: 2,
-        fillColor: color,
+        weight: 1.5,
+        fillColor: "#2563eb", // Vibrant blue dot
         fillOpacity: 0.95,
       }}
     >
       <Popup>
-        <div className="text-xs space-y-1 min-w-[160px]">
+        <div className="text-xs space-y-1 min-w-[160px] text-left">
           <p className="font-bold text-slate-900">{point.title}</p>
           <p className="text-slate-500">{point.location_name}</p>
-          <p className="text-emerald-700 font-semibold uppercase text-[10px]">
+          <p className="text-blue-700 font-semibold uppercase text-[10px]">
             {point.status.replace(/_/g, " ")}
           </p>
           <Link
             href={`/complaints/${point.id}`}
-            className="text-emerald-600 font-bold text-[10px] hover:underline"
+            className="text-blue-600 font-bold text-[10px] hover:underline"
           >
             View report →
           </Link>
@@ -80,6 +80,14 @@ function SingleMarker({ point }: { point: ComplaintMapPoint }) {
   );
 }
 
+function getCategoryColor(type: string = ""): string {
+  const t = type.toLowerCase();
+  if (t.includes("air") || t.includes("aqi") || t.includes("smoke")) return "#06b6d4"; // Cyan
+  if (t.includes("water") || t.includes("sewage") || t.includes("drain")) return "#2563eb"; // Blue
+  if (t.includes("noise") || t.includes("sound")) return "#8b5cf6"; // Purple
+  return "#10b981"; // Emerald for Land/Waste/General
+}
+
 function HotspotMarker({
   cluster,
   radiusMeters,
@@ -87,24 +95,39 @@ function HotspotMarker({
   cluster: ComplaintHotspotCluster;
   radiusMeters: number;
 }) {
+  const color = getCategoryColor(cluster.dominant_category || '');
+  const effectiveRadius = cluster.radius_meters || radiusMeters;
+
+  const categoryBreakdown = useMemo(() => {
+    const counts: Record<string, number> = {};
+    cluster.complaints.forEach((c) => {
+      const cat = c.category_name || cluster.dominant_category || "General";
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    if (Object.keys(counts).length === 0 && cluster.dominant_category) {
+      counts[cluster.dominant_category] = cluster.count;
+    }
+    return counts;
+  }, [cluster.complaints, cluster.dominant_category, cluster.count]);
+
   const countIcon = L.divIcon({
     className: "",
-    html: `<div style="width:28px;height:28px;border-radius:50%;background:#f43f5e;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 8px rgba(244,63,94,0.5)">${cluster.count}</div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    html: `<div style="width:30px;height:30px;border-radius:50%;background:${color};color:#ffffff;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.25)">${cluster.count}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
   });
 
   return (
     <>
       <Circle
         center={[cluster.latitude, cluster.longitude]}
-        radius={radiusMeters}
+        radius={effectiveRadius}
         pathOptions={{
-          color: "#f43f5e",
+          color: color,
           weight: 2,
           dashArray: "6 4",
-          fillColor: "#f43f5e",
-          fillOpacity: 0.12,
+          fillColor: color,
+          fillOpacity: 0.18,
         }}
       />
       <Marker
@@ -112,30 +135,49 @@ function HotspotMarker({
         icon={countIcon}
       >
         <Popup>
-          <div className="text-xs space-y-1 min-w-[180px]">
-            <p className="font-bold text-rose-600">
-              Hotspot · {cluster.count} reports
+          <div className="text-xs space-y-1.5 min-w-[200px] text-left">
+            <p className="font-bold text-slate-900 flex items-center justify-between" style={{ color: color }}>
+              <span>Hotspot · {cluster.count} total reports</span>
+              <span className="text-[9px] uppercase px-1.5 py-0.5 bg-slate-100 rounded text-slate-700 font-extrabold">{cluster.dominant_category || 'General'}</span>
             </p>
             <p className="text-slate-500 text-[10px]">
-              Within {radiusMeters}m of each other
+              Polluted Area Radius: <strong className="text-slate-700">{effectiveRadius}m</strong>
             </p>
-            <ul className="mt-1 space-y-0.5">
-              {cluster.complaints.slice(0, 4).map((c) => (
-                <li key={c.id}>
-                  <Link
-                    href={`/complaints/${c.id}`}
-                    className="text-slate-700 hover:text-emerald-600 font-medium"
-                  >
-                    • {c.title}
-                  </Link>
-                </li>
-              ))}
-              {cluster.count > 4 && (
-                <li className="text-slate-400 text-[10px]">
-                  +{cluster.count - 4} more
-                </li>
-              )}
-            </ul>
+            
+            {Object.keys(categoryBreakdown).length > 0 && (
+              <div className="text-[10px] text-slate-700 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg mt-1 space-y-1">
+                <p className="font-extrabold text-slate-900 dark:text-white uppercase text-[9px] tracking-wider">
+                  Pollution Types Present:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {Object.entries(categoryBreakdown).map(([cat, cnt]) => (
+                    <span key={cat} className="bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded font-bold">
+                      {cat} ({cnt})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {cluster.complaints.length > 0 && (
+              <ul className="mt-1 space-y-0.5 max-h-24 overflow-y-auto">
+                {cluster.complaints.slice(0, 5).map((c) => (
+                  <li key={c.id}>
+                    <Link
+                      href={`/complaints/${c.id}`}
+                      className="text-slate-700 hover:text-emerald-600 font-medium"
+                    >
+                      • {c.title}
+                    </Link>
+                  </li>
+                ))}
+                {cluster.count > 5 && (
+                  <li className="text-slate-400 text-[10px]">
+                    +{cluster.count - 5} more reports
+                  </li>
+                )}
+              </ul>
+            )}
           </div>
         </Popup>
       </Marker>
@@ -146,6 +188,7 @@ function HotspotMarker({
 export function ComplaintLeafletMap({
   mapData,
   loading = false,
+  height,
 }: ComplaintLeafletMapProps) {
   const radiusMeters = mapData?.hotspot_radius_meters ?? 50;
 
@@ -162,7 +205,7 @@ export function ComplaintLeafletMap({
 
   const defaultCenter = useMemo<[number, number]>(() => {
     if (boundsPoints.length > 0) return boundsPoints[0];
-    return [23.0225, 72.5714]; // Ahmedabad fallback
+    return [26.875, 80.997]; // Lucknow / India centroid default
   }, [boundsPoints]);
 
   if (loading) {
@@ -202,18 +245,18 @@ export function ComplaintLeafletMap({
           </p>
         </div>
         <div className="flex items-center gap-3 text-[9px] font-bold uppercase tracking-wider">
-          <span className="flex items-center gap-1 text-emerald-600">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-            Single
+          <span className="flex items-center gap-1 text-blue-600">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+            Nearby Complaint
           </span>
-          <span className="flex items-center gap-1 text-rose-500">
-            <span className="w-3 h-3 rounded-full border-2 border-rose-500 bg-rose-500/20" />
-            Hotspot
+          <span className="flex items-center gap-1 text-slate-700">
+            <span className="w-3 h-3 rounded-full border-2 border-dashed border-slate-500 bg-slate-500/20" />
+            Hotspot Zone
           </span>
         </div>
       </div>
 
-      <div className="h-[400px] w-full relative z-0">
+      <div className="w-full relative z-0" style={{ height: height || "400px" }}>
         <MapContainer
           center={defaultCenter}
           zoom={14}
@@ -241,10 +284,6 @@ export function ComplaintLeafletMap({
 
       <div className="px-4 py-2 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-[9px] text-slate-500 flex flex-wrap gap-3">
         <span>Dashed circle = {radiusMeters}m hotspot zone</span>
-        <span>·</span>
-        <span className="text-amber-600">● Pending</span>
-        <span className="text-rose-500">● Active</span>
-        <span className="text-emerald-600">● Resolved</span>
       </div>
     </div>
   );

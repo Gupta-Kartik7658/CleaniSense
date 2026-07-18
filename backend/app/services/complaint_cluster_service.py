@@ -1,5 +1,6 @@
 import uuid
 from typing import List, Dict, Any
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 
 from app.models.complaint import Complaint
@@ -42,8 +43,8 @@ def cluster_complaints(
     radius_meters: float = HOTSPOT_RADIUS_METERS,
 ) -> Dict[str, Any]:
     """
-    Group complaints whose coordinates fall within `radius_meters` of each other.
-    Returns singles (isolated marks) and hotspots (2+ complaints in range).
+    Group complaints whose coordinates fall within `radius_meters` of each other (Union-Find / K-nearest chaining).
+    Returns singles (isolated marks) and expanding hotspots (2+ complaints in range).
     """
     if not complaints:
         return {"singles": [], "hotspots": [], "total_complaints": 0}
@@ -73,12 +74,31 @@ def cluster_complaints(
         if len(member_complaints) == 1:
             singles.append(points[0])
         else:
+            # Dynamic expanding radius based on distance from centroid to farthest complaint + margin
+            max_dist = max(
+                haversine_m(avg_lon, avg_lat, c.longitude, c.latitude)
+                for c in member_complaints
+            )
+            dynamic_radius = round(max(radius_meters, max_dist + 25.0), 1)
+
+            # Extract all pollution categories present in the cluster & counts per category
+            category_counts: Dict[str, int] = {}
+            for p in points:
+                cat = p.get("category_name") or "General"
+                category_counts[cat] = category_counts.get(cat, 0) + 1
+
+            categories_present = list(category_counts.keys())
+            dominant_category = max(category_counts, key=category_counts.get) if category_counts else "General"
+
             hotspots.append({
                 "id": str(uuid.uuid5(uuid.NAMESPACE_OID, "-".join(sorted(str(p["id"]) for p in points)))),
                 "latitude": avg_lat,
                 "longitude": avg_lon,
                 "count": len(member_complaints),
-                "radius_meters": radius_meters,
+                "radius_meters": dynamic_radius,
+                "dominant_category": dominant_category,
+                "categories_present": categories_present,
+                "category_counts": category_counts,
                 "complaint_ids": [p["id"] for p in points],
                 "complaints": points,
             })
@@ -99,10 +119,39 @@ class ComplaintClusterService:
         user_id: uuid.UUID,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy.orm import joinedload
         complaints = (
             db.query(Complaint)
+            .options(joinedload(Complaint.category))
             .filter(
                 Complaint.user_id == user_id,
+                Complaint.is_deleted == False,
+                Complaint.latitude.isnot(None),
+                Complaint.longitude.isnot(None),
+            )
+            .order_by(Complaint.created_at.desc())
+            .all()
+        )
+        user_points = [_complaint_point(c) for c in complaints]
+        result = cluster_complaints(complaints, radius_meters=radius_meters)
+        result["user_complaints"] = user_points
+        result["hotspot_radius_meters"] = radius_meters
+        return result
+
+    def get_municipality_complaint_map(
+        self,
+        db: Session,
+        municipality_id: uuid.UUID,
+        radius_meters: float = HOTSPOT_RADIUS_METERS,
+    ) -> Dict[str, Any]:
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy.orm import joinedload
+        complaints = (
+            db.query(Complaint)
+            .options(joinedload(Complaint.category))
+            .filter(
+                Complaint.municipality_id == municipality_id,
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
@@ -114,16 +163,17 @@ class ComplaintClusterService:
         result["hotspot_radius_meters"] = radius_meters
         return result
 
-    def get_municipality_complaint_map(
+    def get_all_complaint_map(
         self,
         db: Session,
-        municipality_id: uuid.UUID,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
+        # pyrefly: ignore [missing-import]
+        from sqlalchemy.orm import joinedload
         complaints = (
             db.query(Complaint)
+            .options(joinedload(Complaint.category))
             .filter(
-                Complaint.municipality_id == municipality_id,
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),

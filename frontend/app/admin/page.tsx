@@ -1,99 +1,238 @@
-// app/admin/page.tsx (Upgraded Next.js 15 Admin Dashboard - Geist Dynamic Light/Dark Theme)
+// app/admin/page.tsx (Merged Geist Theme Admin Dashboard)
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import api from '@/lib/api';
 import { dashboardService } from '@/services/dashboard';
 import { complaintService } from '@/services/complaint';
 import { PollutionService } from '@/services/pollutionService';
 import { IncidentReport } from '@/types/pollution';
+import { AdminMapCanvas } from '@/components/admin/AdminMapCanvas';
+import { AdminHotspotItem } from '@/components/admin/AdminIncidentsLeafletMap';
 import {
   Activity,
   AlertTriangle,
   CheckCircle,
   Clock,
-  TrendingUp,
   Users,
   MapPin,
-  Thermometer,
-  BarChart3,
-  TrendingDown,
-  Filter,
-  Eye,
-  MapPinned,
   Building2,
-  Wind,
-  Droplets,
-  Gauge,
-  Radio,
-  Settings,
-  Target,
-  Shield,
-  Zap,
+  Search,
+  RefreshCw,
+  ChevronLeft,
+  AlertCircle,
   X,
-  UserCheck,
-  Check,
-  ChevronRight
+  CheckCircle2,
+  FileText,
+  Shield,
+  Zap
 } from 'lucide-react';
 
 export default function AdminDashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
+  const [hotspotsList, setHotspotsList] = useState<AdminHotspotItem[]>([]);
+  const [singlesList, setSinglesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedTimeFilter, setSelectedTimeFilter] = useState<string>('24h');
+
+  // Map Navigation & Filter States
+  const [selectedType, setSelectedType] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'hotspots' | 'incidents' | 'severity' | 'alphabetical'>('hotspots');
+  const [searchCity, setSearchCity] = useState<string>('');
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedHotspot, setSelectedHotspot] = useState<AdminHotspotItem | null>(null);
+  const [mapMode, setMapMode] = useState<'vector' | 'clusters'>('vector');
+
+  // Drawer / Inspector states
   const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
   const [detailedComplaint, setDetailedComplaint] = useState<any | null>(null);
-  const [actionNotes, setActionNotes] = useState('');
-  const [selectedOfficer, setSelectedOfficer] = useState('Rajesh Kumar');
-  const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedTimeFilter]);
+  }, []);
 
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const data = await dashboardService.getDashboard();
-      setDashboardData(data);
+      // 1. Fetch Summary Stats & Incidents
+      const [dash, incData, hotspotRes] = await Promise.all([
+        dashboardService.getDashboard().catch(() => null),
+        PollutionService.getIncidents({ limit: 100 }).catch(() => ({ incidents: [], total: 0 })),
+        api.get('/admin/hotspots').catch(() => null)
+      ]);
 
-      const recentReports = data.recent_reports || [];
-      const mapped = recentReports.map((c: any) => ({
-        id: c.id,
-        description: c.description || c.title || 'No Description',
-        severity: (c.severity?.toLowerCase() || 'medium') as any,
-        severityScore: c.severity_score,
-        severityPercentage: c.severity_score,
-        imageSeverityScore: c.image_severity_score,
-        aiConfidence: c.ai_confidence_score,
-        surveyScore: c.survey_score,
-        weatherScore: c.weather_score,
-        densityScore: c.density_score,
-        severityBreakdown: c.severity_breakdown,
-        status: (c.status?.toLowerCase() || 'submitted') as any,
-        type: c.category?.name?.toLowerCase() || 'general',
-        reportedAt: c.created_at || new Date().toISOString(),
-        userName: c.user?.name || 'Anonymous Citizen',
-        userEmail: c.user?.email || 'N/A',
-        location: {
-          latitude: c.latitude || 0,
-          longitude: c.longitude || 0,
-          address: c.location_name || 'Location Verified',
-          city: 'Mumbai',
-          district: '',
-          state: ''
-        },
-        mediaUrls: [],
-        userId: c.user_id || '',
-        updatedAt: c.updated_at || c.created_at || new Date().toISOString()
+      setDashboardData(dash);
+      const incList = incData.incidents || [];
+      setIncidents(incList);
+
+      // 2. Process Map & Hotspot Clusters
+      const hData = hotspotRes?.data || hotspotRes || {};
+      const hotspots = (hData.hotspots || []).map((h: any) => ({
+        id: String(h.id),
+        latitude: Number(h.center?.latitude || h.latitude),
+        longitude: Number(h.center?.longitude || h.longitude),
+        count: Number(h.incidentCount || h.count || 2),
+        radius_meters: Number(h.radius || h.radius_meters || 50.0),
+        city: String(h.center?.city || 'Local Region'),
+        district: String(h.center?.district || 'Incident Zone'),
+        dominantType: String(h.dominantType || 'General'),
+        averageSeverity: Number(h.averageSeverity || 3.5),
+        complaints: h.complaints || []
       }));
-      setIncidents(mapped as any as IncidentReport[]);
+
+      setHotspotsList(hotspots);
+      setSinglesList(hData.singles || []);
     } catch (error) {
-      console.error('Failed to load dashboard stats:', error);
+      console.error('Failed to load admin dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const getDominantIcon = (type: string = '') => {
+    const t = type.toLowerCase();
+    if (t.includes('air') || t.includes('aqi') || t.includes('smoke')) return '💨';
+    if (t.includes('water') || t.includes('sewage') || t.includes('drain')) return '💧';
+    if (t.includes('land') || t.includes('waste') || t.includes('garbage')) return '🗑️';
+    if (t.includes('noise') || t.includes('sound')) return '📢';
+    return '📍';
+  };
+
+  const getTypeTheme = (type: string = '') => {
+    const t = type.toLowerCase();
+    if (t.includes('air') || t.includes('aqi') || t.includes('smoke')) {
+      return 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800';
+    }
+    if (t.includes('water') || t.includes('sewage') || t.includes('drain')) {
+      return 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800';
+    }
+    if (t.includes('noise') || t.includes('sound')) {
+      return 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-800';
+    }
+    return 'bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 border-zinc-200 dark:border-zinc-700';
+  };
+
+  function getAreaName(locationName?: string, fallbackCity?: string, index: number = 0): string {
+    if (!locationName) return `Area Zone ${index + 1}`;
+    let clean = locationName.replace(/\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*\)/gi, '').trim();
+    if (clean.toLowerCase().includes('gps coordinates location')) {
+      clean = clean.replace(/gps coordinates location/gi, '').trim();
+    }
+    if (!clean) return `Locality Zone ${index + 1}`;
+    const parts = clean.split(',').map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) {
+      if (fallbackCity && parts[0].toLowerCase() === fallbackCity.toLowerCase()) {
+        return parts[1] || parts[0];
+      }
+      return parts[0];
+    }
+    return parts[0] || `Area Zone ${index + 1}`;
+  }
+
+  // Level 1: Group hotspots dynamically by City
+  const cityGroupings = useMemo(() => {
+    const cityMap: Record<string, {
+      cityName: string;
+      hotspotCount: number;
+      incidentCount: number;
+      filteredIncidentCount: number;
+      dominantType: string;
+      totalSeverity: number;
+      hotspots: AdminHotspotItem[];
+    }> = {};
+
+    hotspotsList.forEach((h: AdminHotspotItem) => {
+      const cityRaw = h.city || 'Local Region';
+      const type = h.dominantType || 'General';
+      const count = h.count || 1;
+      const severity = h.averageSeverity || 3.5;
+
+      let filteredCount = count;
+      if (selectedType !== 'all') {
+        const sel = selectedType.toLowerCase();
+        const matchingComplaints = (h.complaints || []).filter((c: any) => {
+          const cat = (c.category_name || '').toLowerCase();
+          if (sel === 'land') return cat.includes('land') || cat.includes('waste') || cat.includes('garbage');
+          return cat.includes(sel);
+        });
+        filteredCount = matchingComplaints.length;
+      }
+
+      if (!cityMap[cityRaw]) {
+        cityMap[cityRaw] = {
+          cityName: cityRaw,
+          hotspotCount: 0,
+          incidentCount: 0,
+          filteredIncidentCount: 0,
+          dominantType: type,
+          totalSeverity: 0,
+          hotspots: []
+        };
+      }
+
+      cityMap[cityRaw].hotspotCount += 1;
+      cityMap[cityRaw].incidentCount += count;
+      cityMap[cityRaw].filteredIncidentCount += filteredCount;
+      cityMap[cityRaw].totalSeverity += severity;
+      cityMap[cityRaw].hotspots.push(h);
+    });
+
+    let result = Object.values(cityMap).map(c => ({
+      ...c,
+      averageSeverity: roundVal(c.totalSeverity / (c.hotspotCount || 1))
+    }));
+
+    if (selectedType !== 'all') {
+      result = result.filter(c => {
+        const dom = c.dominantType.toLowerCase();
+        const sel = selectedType.toLowerCase();
+        if (sel === 'land') return dom.includes('land') || dom.includes('waste') || dom.includes('garbage') || c.filteredIncidentCount > 0;
+        return dom.includes(sel) || c.filteredIncidentCount > 0;
+      });
+    }
+
+    if (searchCity.trim()) {
+      const term = searchCity.toLowerCase();
+      result = result.filter(c => c.cityName.toLowerCase().includes(term));
+    }
+
+    // Default Sort: City with highest hotspot count at top
+    result.sort((a, b) => {
+      if (sortBy === 'hotspots') return b.hotspotCount - a.hotspotCount;
+      if (sortBy === 'incidents') return b.incidentCount - a.incidentCount;
+      if (sortBy === 'severity') return b.averageSeverity - a.averageSeverity;
+      if (sortBy === 'alphabetical') return a.cityName.localeCompare(b.cityName);
+      return b.hotspotCount - a.hotspotCount;
+    });
+
+    return result;
+  }, [hotspotsList, selectedType, searchCity, sortBy]);
+
+  function roundVal(n: number) {
+    return Math.round(n * 10) / 10;
+  }
+
+  // Level 2: Hotspots in selected city
+  const selectedCityHotspots = useMemo(() => {
+    if (!selectedCity) return [];
+    const cityObj = cityGroupings.find(c => c.cityName === selectedCity);
+    return cityObj ? cityObj.hotspots : hotspotsList.filter(h => h.city === selectedCity);
+  }, [selectedCity, cityGroupings, hotspotsList]);
+
+  // Filtered hotspots for display on Leaflet Map
+  const displayHotspots = useMemo(() => {
+    if (selectedCity) {
+      return hotspotsList.filter(h => h.city === selectedCity);
+    }
+    if (selectedType === 'all') return hotspotsList;
+    return hotspotsList.filter(h => {
+      const dom = (h.dominantType || '').toLowerCase();
+      const sel = selectedType.toLowerCase();
+      if (sel === 'land') return dom.includes('land') || dom.includes('waste') || dom.includes('garbage');
+      return dom.includes(sel);
+    });
+  }, [hotspotsList, selectedCity, selectedType]);
 
   const handleSelectIncident = async (incident: IncidentReport) => {
     setSelectedIncident(incident);
@@ -106,483 +245,528 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleUpdateStatus = async (status: 'investigating' | 'resolved' | 'dismissed') => {
-    if (!selectedIncident) return;
-    setIsActionLoading(true);
-    try {
-      let mappedStatus = 'in_progress';
-      if (status === 'resolved') {
-        mappedStatus = 'resolved';
-      } else if (status === 'dismissed') {
-        mappedStatus = 'dismissed';
-      } else {
-        mappedStatus = 'investigating';
-      }
-
-      await PollutionService.updateIncidentStatus(
-        selectedIncident.id,
-        mappedStatus,
-        actionNotes || undefined
-      );
-      
-      // Load details again to show fresh timeline
-      const freshDetail = await complaintService.getComplaintDetail(selectedIncident.id);
-      setDetailedComplaint(freshDetail);
-      
-      // Update selected incident state
-      setSelectedIncident(prev => prev ? { ...prev, status: mappedStatus as any } : null);
-      setActionNotes('');
-      loadDashboardData();
-    } catch (e) {
-      console.error('Status change error:', e);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const handleAssignOfficer = async () => {
-    if (!selectedIncident) return;
-    setIsActionLoading(true);
-    try {
-      await PollutionService.assignIncident(selectedIncident.id, selectedOfficer);
-      
-      const freshDetail = await complaintService.getComplaintDetail(selectedIncident.id);
-      setDetailedComplaint(freshDetail);
-
-      setSelectedIncident(prev => prev ? { ...prev, status: 'investigating' as any, assignedTo: selectedOfficer } : null);
-      loadDashboardData();
-    } catch (e) {
-      console.error('Assignment error:', e);
-    } finally {
-      setIsActionLoading(false);
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'air': return '💨 Air Quality';
-      case 'land': return '🗑️ Land Waste';
-      case 'water': return '💧 Water Pollution';
-      case 'noise': return '📢 Industrial Noise';
-      default: return '📍 Incident';
-    }
-  };
-
   const getSeverityBadge = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400';
-      case 'high': return 'border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-400';
-      case 'moderate': return 'border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-800 dark:text-yellow-400';
-      case 'medium': return 'border-yellow-200 dark:border-yellow-900 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-800 dark:text-yellow-400';
-      default: return 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-400';
+    switch (severity?.toLowerCase()) {
+      case 'critical':
+      case 'high': return 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-400';
+      case 'medium': return 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900 dark:text-amber-400';
+      default: return 'bg-zinc-100 border-zinc-200 text-zinc-800 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-200';
     }
   };
 
-  const formatSeverity = (incident: IncidentReport) => {
-    const score = incident.severityPercentage ?? incident.severityScore;
-    return score !== undefined && score !== null
-      ? `${Math.round(score)}% ${incident.severity}`
-      : incident.severity;
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'resolved': return 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-250 dark:border-emerald-900';
-      case 'dismissed': return 'bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700';
-      case 'investigating': return 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-900';
-      default: return 'bg-amber-50 dark:bg-amber-950/20 text-amber-750 dark:text-amber-400 border-amber-250 dark:border-amber-900';
-    }
-  };
+  // Recent 5 reported incidents for Recent Logs
+  const recentLogs = useMemo(() => {
+    return incidents.slice(0, 5);
+  }, [incidents]);
 
   return (
-    <div className="space-y-8 fade-in text-zinc-900 dark:text-zinc-100 font-sans">
+    <div className="space-y-6 fade-in text-zinc-900 dark:text-zinc-100 font-sans">
       
-      {/* Welcome Section */}
-      <div className="relative overflow-hidden rounded-lg bg-zinc-950 p-8 border border-zinc-800 text-left">
-        <div 
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-          }}
-        />
-        <div className="relative">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-1.5 bg-zinc-800 rounded">
-                  <Shield className="h-5 w-5 text-zinc-400" />
-                </div>
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Administrator Workspace</span>
-              </div>
-              <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Smart City Dashboard</h1>
-              <p className="text-zinc-400 text-sm max-w-xl">
-                Hyperlocal community environmental monitoring and AI-powered pollution predictions.
-              </p>
-            </div>
-            <div className="flex items-center gap-6 text-xs text-zinc-500 font-medium">
-              <div className="text-right">
-                <div>System Status</div>
-                <div className="flex items-center gap-1.5 mt-1 font-bold text-white">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Operational
-                </div>
-              </div>
-              <div className="h-8 w-px bg-zinc-800" />
-              <div className="text-right">
-                <div>AI Classifier</div>
-                <div className="flex items-center gap-1.5 mt-1 font-bold text-white">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Active
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
-            {[
-              { label: 'Total Reports', value: dashboardData?.overview?.total_reports ?? 0, icon: Building2 },
-              { label: 'Active Issues', value: dashboardData?.overview?.active_reports ?? 0, icon: Target },
-              { label: 'Resolved Issues', value: dashboardData?.overview?.resolved_reports ?? 0, icon: Clock },
-              { label: 'Pending Action', value: dashboardData?.overview?.pending_reports ?? 0, icon: Users },
-            ].map((item) => (
-              <div key={item.label} className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-left">
-                <div className="flex items-center gap-2 text-zinc-400">
-                  <item.icon className="h-4 w-4" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">{item.label}</span>
-                </div>
-                <div className="text-xl font-bold text-white mt-1">{loading ? '...' : item.value}</div>
-              </div>
-            ))}
-          </div>
+      {/* Header Banner matching Settings / Review Media styling */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-left">
+        <div>
+          <h1 className="text-2xl font-extrabold text-zinc-950 dark:text-white tracking-tight flex items-center gap-2">
+            <Building2 className="h-6 w-6 text-zinc-800 dark:text-zinc-200" />
+            Dashboard
+          </h1>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+            Geospatial incident monitoring, active city hotspots, and citizen report verification flow
+          </p>
+        </div>
+
+        {/* Action Toolbar buttons matching Settings / Review Media theme */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link
+            href="/admin/media"
+            className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-all shadow-xs"
+          >
+            Review Media
+          </Link>
+          <Link
+            href="/admin/users"
+            className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition-all"
+          >
+            Manage Users
+          </Link>
+          <Link
+            href="/admin/reports"
+            className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition-all"
+          >
+            Reports
+          </Link>
+          <Link
+            href="/admin/settings"
+            className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-700 transition-all"
+          >
+            Settings
+          </Link>
         </div>
       </div>
 
-      {/* Critical Callout */}
-      {dashboardData && dashboardData.overview?.pending_reports > 0 && (
-        <div className="p-4 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg text-left flex items-start gap-3">
-          <AlertTriangle className="h-5 w-5 text-red-650 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="text-sm font-bold text-red-950 dark:text-red-200">Immediate Review Required</h4>
-            <p className="text-xs text-red-700 dark:text-red-400 mt-0.5">
-              There are {dashboardData.overview.pending_reports} active pending reports currently awaiting municipality review.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Compact Height Stats Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { name: 'Total Reports', value: dashboardData?.overview?.total_reports ?? 0, icon: Activity },
-          { name: 'Active Reports', value: dashboardData?.overview?.active_reports ?? 0, icon: AlertTriangle },
-          { name: 'Resolved Reports', value: dashboardData?.overview?.resolved_reports ?? 0, icon: CheckCircle },
-          { name: 'Pending Reports', value: dashboardData?.overview?.pending_reports ?? 0, icon: Clock },
+          { name: 'Total Reports', value: dashboardData?.overview?.total_reports ?? incidents.length, icon: Activity },
+          { name: 'Active Issues', value: dashboardData?.overview?.active_reports ?? incidents.filter(i => i.status !== 'resolved').length, icon: AlertTriangle },
+          { name: 'Resolved Reports', value: dashboardData?.overview?.resolved_reports ?? incidents.filter(i => i.status === 'resolved').length, icon: CheckCircle },
+          { name: 'Active Hotspots', value: hotspotsList.length, icon: MapPin },
         ].map((stat) => (
           <div
             key={stat.name}
-            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-lg p-6 text-left relative overflow-hidden group hover:border-zinc-350 dark:hover:border-zinc-700 transition-all cursor-pointer"
+            className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-xs rounded-xl py-3 px-4 text-left flex items-center justify-between hover:border-zinc-350 dark:hover:border-zinc-700 transition-all"
           >
-            <div className="flex items-center justify-between mb-4">
-              <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-900 dark:text-zinc-950 dark:text-white group-hover:bg-zinc-950 dark:group-hover:bg-white group-hover:text-zinc-950 dark:text-white dark:group-hover:text-zinc-950 transition-colors">
-                <stat.icon className="h-5 w-5" />
+            <div>
+              <div className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">{stat.name}</div>
+              <div className="text-xl font-extrabold text-zinc-950 dark:text-white mt-0.5 leading-none">
+                {loading ? <span className="h-5 w-10 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse inline-block" /> : stat.value}
               </div>
             </div>
-            <div className="text-xs text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">{stat.name}</div>
-            <div className="text-2xl font-extrabold text-zinc-950 dark:text-white mt-1">
-              {loading ? <span className="h-7 w-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse inline-block" /> : stat.value}
+            <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-700 dark:text-zinc-300 shrink-0">
+              <stat.icon className="h-4 w-4" />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Merged Incidents Map Section with 2-Level Active Hotspots by City */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch text-left">
         
-        {/* Map Placeholder Panel */}
-        <div className="lg:col-span-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden flex flex-col text-left">
-          <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-zinc-950 dark:text-white flex items-center gap-2">
-                <MapPin className="h-4.5 w-4.5 text-zinc-800 dark:text-zinc-200" />
-                Live Incident Map
-              </h3>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">Community verified pollution coordinates</p>
-            </div>
-            <Link 
-              href="/admin/map" 
-              className="text-xs dark:text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-950 dark:text-white font-bold flex items-center gap-1"
-            >
-              Expand Map
-              <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="p-5 flex-1 flex flex-col items-center justify-center min-h-[300px] bg-[#fafafa] dark:bg-zinc-950">
-            <MapPinned className="h-10 w-10 text-zinc-400 dark:text-zinc-400 mb-3" />
-            <h4 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 dark:text-zinc-200">Map Canvas Interface</h4>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 text-center max-w-xs leading-normal">
-              Click "Expand Map" to review location points, filters, and hotspot cluster trends.
-            </p>
-          </div>
-        </div>
+        {/* Left Sidebar: 2-Level Navigation */}
+        <div className="lg:col-span-1 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 shadow-xs flex flex-col max-h-[650px]">
+          
+          {/* Sidebar Header */}
+          <div className="pb-3 border-b border-zinc-200 dark:border-zinc-800 space-y-3">
+            {selectedCity ? (
+              /* Level 2 Header with Back Button */
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    setSelectedCity(null);
+                    setSelectedHotspot(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-zinc-900 dark:text-white hover:underline cursor-pointer"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back to All Cities
+                </button>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-zinc-950 dark:text-white text-base truncate">
+                    {selectedCity}
+                  </h3>
+                  <span className="text-[10px] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 px-2 py-0.5 rounded font-extrabold">
+                    {selectedCityHotspots.length} Hotspots
+                  </span>
+                </div>
+              </div>
+            ) : (
+              /* Level 1 Header */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-extrabold text-zinc-950 dark:text-white flex items-center gap-2 text-sm">
+                    <Building2 className="h-4.5 w-4.5 text-zinc-800 dark:text-zinc-200" />
+                    Active Hotspots by City ({cityGroupings.length})
+                  </h3>
+                </div>
 
-        {/* Recent Incidents Feed */}
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden flex flex-col text-left">
-          <div className="p-5 border-b border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-            <h3 className="font-bold text-zinc-950 dark:text-white">Recent Logs</h3>
-            <Link href="/admin/media" className="text-xs dark:text-zinc-500 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-zinc-950 dark:text-white font-bold transition-colors">
-              Review Flow
-            </Link>
+                {/* City Search Bar */}
+                <div className="relative">
+                  <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search city..."
+                    value={searchCity}
+                    onChange={(e) => setSearchCity(e.target.value)}
+                    className="w-full text-xs border border-zinc-200 dark:border-zinc-800 rounded-lg pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-white focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                  />
+                </div>
+
+                {/* Sort Option Dropdown */}
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9px]">Sort Cities</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e: any) => setSortBy(e.target.value)}
+                    className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-md text-xs py-1 px-2 font-bold outline-none cursor-pointer"
+                  >
+                    <option value="hotspots">Most Hotspots (Default)</option>
+                    <option value="incidents">Most Incidents</option>
+                    <option value="severity">Highest Severity</option>
+                    <option value="alphabetical">Alphabetical (A-Z)</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
           
-          <div className="p-4 space-y-3 overflow-y-auto max-h-[350px]">
+          {/* Sidebar Content Area */}
+          <div className="space-y-3 overflow-y-auto flex-1 pr-1 mt-3">
             {loading ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-16 w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-100 dark:border-zinc-850 rounded animate-pulse" />
-                ))}
+              <div className="py-12 text-center text-xs text-zinc-400 flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="h-5 w-5 animate-spin text-zinc-700 dark:text-zinc-300" />
+                <span className="font-semibold">Loading city hotspots...</span>
               </div>
-            ) : incidents.length === 0 ? (
-              <div className="py-8 text-center text-zinc-400 text-xs">No incidents registered.</div>
-            ) : (
-              incidents.map((incident) => (
-                <div
-                  key={incident.id}
-                  onClick={() => handleSelectIncident(incident)}
-                  className="p-3 border border-zinc-150 dark:border-zinc-800 rounded-lg hover:border-zinc-300 dark:hover:border-zinc-700 hover:bg-zinc-50/50 dark:hover:bg-zinc-100 dark:bg-zinc-800/40 transition-all cursor-pointer text-left"
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate flex-1">{incident.description || 'No Description'}</p>
-                    <span className={`text-[9px] px-1.5 py-0.5 rounded border capitalize font-semibold shrink-0 ${getSeverityBadge(incident.severity)}`}>
-                      {formatSeverity(incident)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between mt-3 text-[10px] text-zinc-500 dark:text-zinc-400">
-                    <span className="flex items-center gap-0.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-400 dark:bg-zinc-600" />
-                  {getTypeLabel(incident.type)}
-                    </span>
-                    <span>{new Date(incident.reportedAt).toLocaleDateString()}</span>
-                  </div>
+            ) : selectedCity ? (
+              /* Level 2 View: Hotspot Area Cards for Selected City */
+              selectedCityHotspots.length === 0 ? (
+                <div className="py-12 text-center text-xs text-zinc-400 font-semibold">
+                  No hotspot areas in {selectedCity}.
                 </div>
-              ))
+              ) : (
+                selectedCityHotspots.map((h, idx) => {
+                  const isSelected = selectedHotspot?.id === h.id;
+                  const themeClass = getTypeTheme(h.dominantType);
+                  const firstComplaintLoc = h.complaints[0]?.location_name || h.district;
+                  const areaName = getAreaName(firstComplaintLoc, selectedCity, idx);
+
+                  return (
+                    <div
+                      key={h.id}
+                      onClick={() => setSelectedHotspot(h)}
+                      className={`p-3.5 rounded-xl border transition-all cursor-pointer space-y-2.5 ${
+                        isSelected 
+                          ? 'border-zinc-900 dark:border-white bg-zinc-100/60 dark:bg-zinc-800/60 shadow-xs ring-1 ring-zinc-900/10 dark:ring-white/20' 
+                          : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 hover:border-zinc-300 dark:hover:border-zinc-700'
+                      }`}
+                    >
+                      {/* Area / Locality Name */}
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{getDominantIcon(h.dominantType)}</span>
+                          <div>
+                            <h4 className="text-xs font-extrabold text-zinc-950 dark:text-white truncate max-w-[130px]">
+                              {areaName}
+                            </h4>
+                            <p className="text-[10px] text-zinc-400 font-bold">
+                              Radius: {h.radius_meters || 50.0}m Zone
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border font-extrabold ${themeClass}`}>
+                          {h.dominantType}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800/80 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <span className="font-semibold">
+                          Severity: <strong className="text-zinc-800 dark:text-zinc-200">{h.averageSeverity || 3.5}/5.0</strong>
+                        </span>
+                        <span className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-extrabold text-[10px] px-2 py-0.5 rounded-md">
+                          {h.count || 2} Reports
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )
+            ) : (
+              /* Level 1 View: City Overview List */
+              cityGroupings.length === 0 ? (
+                <div className="py-12 text-center text-xs text-zinc-400 font-semibold space-y-1">
+                  <AlertCircle className="h-6 w-6 mx-auto text-zinc-400 mb-1" />
+                  <p>No city hotspots match criteria.</p>
+                </div>
+              ) : (
+                cityGroupings.map((group) => {
+                  const themeClass = getTypeTheme(group.dominantType);
+
+                  return (
+                    <div
+                      key={group.cityName}
+                      onClick={() => {
+                        setSelectedCity(group.cityName);
+                        if (group.hotspots.length > 0) {
+                          setSelectedHotspot(group.hotspots[0]);
+                        }
+                      }}
+                      className="p-3.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/50 hover:border-zinc-400 dark:hover:border-zinc-600 hover:bg-zinc-100/40 transition-all cursor-pointer space-y-2.5"
+                    >
+                      {/* City Name as Block Title */}
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xl">{getDominantIcon(group.dominantType)}</span>
+                          <div>
+                            <h4 className="text-sm font-extrabold text-zinc-950 dark:text-white truncate max-w-[135px]">
+                              {group.cityName}
+                            </h4>
+                            <p className="text-[10px] text-zinc-400 font-bold">
+                              {group.hotspotCount} {group.hotspotCount === 1 ? 'Hotspot Region' : 'Hotspot Regions'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full border font-extrabold ${themeClass}`}>
+                          {group.dominantType}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-800/80 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <span className="font-semibold">
+                          Avg Severity: <strong className="text-zinc-800 dark:text-zinc-200">{group.averageSeverity}/5.0</strong>
+                        </span>
+                        <span className="bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 font-extrabold text-[10px] px-2.5 py-0.5 rounded-md">
+                          {selectedType === 'all' ? group.incidentCount : group.filteredIncidentCount} Reports
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )
             )}
           </div>
         </div>
+
+        {/* Right Side: Leaflet OpenStreetMap Canvas */}
+        <div className="lg:col-span-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-hidden flex flex-col relative min-h-[550px]">
+          
+          {/* Map Controls & Pollution Type Filter Header Bar */}
+          <div className="p-3 bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-xs">
+            <div className="flex items-center gap-2 text-zinc-800 dark:text-zinc-200 font-bold">
+              <Building2 className="h-4 w-4 text-zinc-700 dark:text-zinc-300" />
+              <span>
+                {selectedCity 
+                  ? `City Focus: ${selectedCity} (${displayHotspots.length} Hotspot Regions)` 
+                  : `System Map (${displayHotspots.length} Active Hotspots)`}
+              </span>
+              {selectedCity && (
+                <button
+                  onClick={() => { setSelectedCity(null); setSelectedHotspot(null); }}
+                  className="text-[10px] bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 px-2 py-0.5 rounded font-extrabold cursor-pointer"
+                >
+                  Reset City Filter
+                </button>
+              )}
+            </div>
+
+            {/* Pollution Filter & Map Layer Toggles directly above map container */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              {/* Pollution Filter Pills */}
+              <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-0.5 shadow-xs">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'air', label: 'Air' },
+                  { id: 'water', label: 'Water' },
+                  { id: 'land', label: 'Land' },
+                  { id: 'noise', label: 'Noise' },
+                ].map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedType(t.id)}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded transition-all cursor-pointer ${
+                      selectedType === t.id 
+                        ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-xs' 
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Map Layer Mode Toggles */}
+              <div className="flex bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-0.5 shadow-xs">
+                <button
+                  onClick={() => setMapMode('vector')}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded capitalize cursor-pointer transition-all ${
+                    mapMode === 'vector' 
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-xs' 
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                  }`}
+                >
+                  Standard Map
+                </button>
+                <button
+                  onClick={() => setMapMode('clusters')}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded capitalize cursor-pointer transition-all ${
+                    mapMode === 'clusters' 
+                      ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-xs' 
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white'
+                  }`}
+                >
+                  Hotspot Regions View
+                </button>
+              </div>
+
+              <button 
+                onClick={loadDashboardData}
+                className="p-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg transition-all cursor-pointer shadow-xs"
+                title="Refresh telemetry data"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Leaflet OpenStreetMap Canvas Component */}
+          <div className="flex-1 relative">
+            <AdminMapCanvas
+              hotspots={displayHotspots}
+              singles={singlesList}
+              selectedCity={selectedCity}
+              selectedHotspotId={selectedHotspot?.id}
+              pollutionFilter={selectedType}
+              mapMode={mapMode}
+              height="550px"
+              onSelectHotspot={(hotspot) => {
+                setSelectedHotspot(hotspot);
+                if (hotspot.city) setSelectedCity(hotspot.city);
+              }}
+            />
+          </div>
+
+          {/* Details Footer HUD for Selected Hotspot */}
+          {selectedHotspot && (
+            <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-left">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">{getDominantIcon(selectedHotspot.dominantType)}</span>
+                <div>
+                  <h4 className="text-sm font-extrabold text-zinc-950 dark:text-white flex items-center gap-2">
+                    50m Hotspot Area: {getAreaName(selectedHotspot.complaints[0]?.location_name || selectedHotspot.district, selectedHotspot.city)}
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    City: {selectedHotspot.city} · Radius: {selectedHotspot.radius_meters || 50.0}m Zone
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-xs font-semibold">
+                <div className="text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3.5 py-1.5 rounded-lg min-w-[85px]">
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase">Avg Severity</p>
+                  <p className="text-amber-600 dark:text-amber-400 font-extrabold mt-0.5">
+                    {selectedHotspot.averageSeverity || 3.5}/5.0
+                  </p>
+                </div>
+
+                <div className="text-center bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 px-3.5 py-1.5 rounded-lg min-w-[85px]">
+                  <p className="text-[9px] text-zinc-400 font-bold uppercase">Incident Count</p>
+                  <p className="text-zinc-900 dark:text-white font-extrabold mt-0.5">
+                    {selectedHotspot.count || 1} Reports
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setSelectedHotspot(null)}
+                  className="px-3 py-2 bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-800 dark:text-zinc-200 rounded-lg transition-colors cursor-pointer text-xs font-bold"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Incident Detail Drawer / Modal Overlay */}
+      {/* Recent Logs Section: Displays Recent Last 5 Reported Incidents */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs overflow-hidden flex flex-col text-left">
+        <div className="p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+          <div>
+            <h3 className="font-extrabold text-zinc-950 dark:text-white text-lg flex items-center gap-2">
+              <Clock className="h-5 w-5 text-zinc-800 dark:text-zinc-200" />
+              Recent Logs (Last 5 Reported Incidents)
+            </h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Latest citizen incident submissions requiring municipal review
+            </p>
+          </div>
+
+          <Link href="/admin/media" className="text-xs font-bold text-zinc-900 dark:text-white hover:underline">
+            View All Media Logs →
+          </Link>
+        </div>
+        
+        <div className="p-5 grid grid-cols-1 md:grid-cols-5 gap-4">
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-28 w-full bg-zinc-100 dark:bg-zinc-800 rounded-xl animate-pulse" />
+            ))
+          ) : recentLogs.length === 0 ? (
+            <div className="col-span-5 py-8 text-center text-zinc-400 text-xs font-semibold">
+              No recent incident logs registered in system.
+            </div>
+          ) : (
+            recentLogs.map((incident) => (
+              <div
+                key={incident.id}
+                onClick={() => handleSelectIncident(incident)}
+                className="p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:border-zinc-400 dark:hover:border-zinc-600 bg-zinc-50/50 dark:bg-zinc-950/50 transition-all cursor-pointer text-left flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex justify-between items-start gap-2 mb-2">
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full border font-extrabold capitalize ${getSeverityBadge(incident.severity)}`}>
+                      {incident.severity || 'medium'}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-bold">
+                      {incident.reportedAt ? new Date(incident.reportedAt).toLocaleDateString() : ''}
+                    </span>
+                  </div>
+
+                  <h4 className="text-xs font-extrabold text-zinc-950 dark:text-white line-clamp-2 leading-snug">
+                    {incident.description || 'Reported Incident'}
+                  </h4>
+                </div>
+
+                <div className="mt-3 pt-2 border-t border-zinc-200 dark:border-zinc-800/80 flex items-center justify-between text-[10px] text-zinc-500 dark:text-zinc-400">
+                  <span className="font-bold truncate text-zinc-700 dark:text-zinc-300">
+                    👤 {incident.userName || 'Citizen'}
+                  </span>
+                  <span className="capitalize font-bold text-zinc-900 dark:text-zinc-100">
+                    {incident.status ? incident.status.replace(/_/g, ' ') : 'Submitted'}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Incident Detail Inspector Drawer */}
       {selectedIncident && (
         <div className="fixed inset-0 z-50 flex items-center justify-end">
-          {/* Overlay mask */}
           <div 
             className="fixed inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-xs"
             onClick={() => setSelectedIncident(null)}
           />
           
-          {/* Drawer container */}
           <div className="relative w-full max-w-md h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl p-6 text-left z-10 animate-slide-in">
-            {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 mb-6">
               <div>
                 <span className={`text-[10px] px-2 py-0.5 rounded border capitalize font-bold ${getSeverityBadge(selectedIncident.severity)}`}>
                   {selectedIncident.severity} Severity
-                  {((selectedIncident.severityPercentage ?? selectedIncident.severityScore) !== undefined) && (
-                    <span> · {Math.round((selectedIncident.severityPercentage ?? selectedIncident.severityScore) as number)}%</span>
-                  )}
                 </span>
                 <h3 className="text-base font-bold text-zinc-950 dark:text-white mt-2">Inspect Incident Log</h3>
               </div>
               <button 
                 onClick={() => setSelectedIncident(null)}
-                className="p-1.5 text-zinc-400 hover:dark:text-zinc-400 dark:text-zinc-300 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+                className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Scrollable details */}
             <div className="flex-1 overflow-y-auto space-y-6 pr-1">
               <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Description</p>
+                <p className="text-[10px] uppercase font-bold text-zinc-400">Description</p>
                 <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed mt-1">{selectedIncident.description}</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Logged By</p>
-                  <p className="text-xs font-bold dark:text-zinc-200 dark:text-zinc-200 mt-1">{selectedIncident.userName}</p>
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400">{selectedIncident.userEmail}</p>
+                  <p className="text-[10px] uppercase font-bold text-zinc-400">Logged By</p>
+                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 mt-1">{selectedIncident.userName}</p>
+                  <p className="text-[10px] text-zinc-500">{selectedIncident.userEmail}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Coordinates</p>
-                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 mt-1 font-mono">
+                  <p className="text-[10px] uppercase font-bold text-zinc-400">Coordinates</p>
+                  <p className="text-xs text-zinc-900 dark:text-zinc-100 mt-1 font-mono">
                     {selectedIncident.location.latitude.toFixed(4)}, {selectedIncident.location.longitude.toFixed(4)}
                   </p>
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate">{selectedIncident.location.address || 'Address Verified'}</p>
+                  <p className="text-[10px] text-zinc-500 truncate">{selectedIncident.location.address || 'Address Verified'}</p>
                 </div>
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Log Type</p>
-                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">{getTypeLabel(selectedIncident.type)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Severity Score</p>
-                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">
-                    {((selectedIncident.severityPercentage ?? selectedIncident.severityScore) !== undefined)
-                      ? `${Math.round((selectedIncident.severityPercentage ?? selectedIncident.severityScore) as number)}%`
-                      : 'Unscored'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">AI Confidence</p>
-                  <p className="text-xs dark:text-zinc-200 dark:text-zinc-200 font-semibold mt-1">
-                    {selectedIncident.aiConfidence !== undefined && selectedIncident.aiConfidence !== null
-                      ? `${Math.round(selectedIncident.aiConfidence)}%`
-                      : 'Not available'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Workflow Status</p>
-                  <div className="mt-1">
-                    <span className={`text-[10px] px-2 py-0.5 rounded border capitalize font-semibold ${getStatusBadge(selectedIncident.status)}`}>
-                      {selectedIncident.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Media images if present */}
-              {detailedComplaint?.attachments && detailedComplaint.attachments.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Reported Media</p>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {detailedComplaint.attachments.map((a: any, i: number) => (
-                      <img 
-                        key={a.id || i} 
-                        src={a.public_url} 
-                        alt={a.file_name || "Attachment"} 
-                        className="rounded-lg object-cover w-full h-32 border border-zinc-200 dark:border-zinc-800"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Timeline Log */}
-              {detailedComplaint?.timeline && detailedComplaint.timeline.length > 0 && (
-                <div className="border-t border-zinc-150 dark:border-zinc-800 pt-4">
-                  <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Workflow Timeline</p>
-                  <div className="mt-3 space-y-3">
-                    {detailedComplaint.timeline.map((evt: any) => (
-                      <div key={evt.id} className="flex gap-2 text-xs">
-                        <span className="text-zinc-400 dark:text-zinc-500 shrink-0 font-medium">{new Date(evt.created_at).toLocaleDateString()}</span>
-                        <div className="flex-1">
-                          <span className="font-bold capitalize text-zinc-800 dark:text-zinc-200">{evt.status.replace(/_/g, ' ')}</span>
-                          {evt.remarks && <p className="text-[11px] text-zinc-500 dark:text-zinc-450 mt-0.5">{evt.remarks}</p>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Assignment actions */}
-              <div className="p-4 bg-zinc-50 dark:bg-zinc-950 rounded-lg border border-zinc-150 dark:border-zinc-850 space-y-3">
-                <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500 flex items-center gap-1">
-                  <UserCheck className="h-3.5 w-3.5" />
-                  Assign Municipal Officer
-                </p>
-                <div className="flex gap-2">
-                  <select 
-                    value={selectedOfficer}
-                    onChange={(e) => setSelectedOfficer(e.target.value)}
-                    className="flex-1 bg-white dark:bg-zinc-900 border border-zinc-250 dark:border-zinc-800 text-xs rounded-md px-2 py-1.5 text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-400"
-                  >
-                    <option value="Rajesh Kumar">Rajesh Kumar (Air Control)</option>
-                    <option value="Priya Sharma">Priya Sharma (Waste Manager)</option>
-                    <option value="Amit Patel">Amit Patel (Water Quality)</option>
-                  </select>
-                  <button
-                    onClick={handleAssignOfficer}
-                    disabled={isActionLoading}
-                    className="px-3 py-1.5 bg-zinc-950 dark:bg-white hover:bg-zinc-900 dark:hover:bg-zinc-100 text-zinc-950 dark:text-white dark:text-zinc-950 text-xs font-bold rounded-md transition-colors cursor-pointer"
-                  >
-                    Assign
-                  </button>
-                </div>
-              </div>
-
-              {/* Remarks/Notes */}
-              <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-400 dark:text-zinc-500">Action Remarks</p>
-                <textarea
-                  value={actionNotes}
-                  onChange={(e) => setActionNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Enter notes explaining status transition..."
-                  className="w-full mt-1.5 px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md text-xs text-zinc-800 dark:text-zinc-200 outline-none focus:border-zinc-450 dark:focus:border-zinc-600 resize-none"
-                />
-              </div>
-            </div>
-
-            {/* Action buttons footer */}
-            <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4 mt-6 grid grid-cols-3 gap-2">
-              <button
-                onClick={() => handleUpdateStatus('investigating')}
-                disabled={isActionLoading}
-                className="py-2.5 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-400 hover:bg-blue-100 disabled:opacity-50 text-xs font-bold rounded-lg border border-blue-200 dark:border-blue-900 transition-colors cursor-pointer"
-              >
-                Investigate
-              </button>
-              <button
-                onClick={() => handleUpdateStatus('resolved')}
-                disabled={isActionLoading}
-                className="py-2.5 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 disabled:opacity-50 text-xs font-bold rounded-lg border border-emerald-250 dark:border-emerald-900 transition-colors cursor-pointer"
-              >
-                Resolve
-              </button>
-              <button
-                onClick={() => handleUpdateStatus('dismissed')}
-                disabled={isActionLoading}
-                className="py-2.5 bg-zinc-50 dark:bg-zinc-800 dark:text-zinc-400 dark:text-zinc-300 hover:bg-zinc-100 disabled:opacity-50 text-xs font-bold rounded-lg border border-zinc-200 dark:border-zinc-700 transition-colors cursor-pointer"
-              >
-                Dismiss
-              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Bottom Layout - Quick Actions grid */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm rounded-lg p-6 text-left">
-        <h3 className="font-bold text-zinc-950 dark:text-white mb-4">Quick Links</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { label: 'Generate Reports', icon: BarChart3, path: '/admin/reports' },
-            { label: 'Review Media Library', icon: Eye, path: '/admin/media' },
-            { label: 'Manage Accounts', icon: Users, path: '/admin/users' },
-            { label: 'System Configuration', icon: Settings, path: '/admin/settings' },
-          ].map((action) => (
-            <Link
-              key={action.label}
-              href={action.path}
-              className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-850 hover:border-zinc-350 dark:hover:border-zinc-700 hover:bg-zinc-100/50 dark:hover:bg-zinc-900/50 transition-all text-center flex flex-col items-center justify-center group cursor-pointer"
-            >
-              <div className="w-10 h-10 rounded bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-850 text-zinc-950 dark:text-white p-2 mb-2 group-hover:bg-zinc-950 dark:group-hover:bg-white group-hover:text-zinc-950 dark:text-white dark:group-hover:text-zinc-950 transition-colors flex items-center justify-center">
-                <action.icon className="w-5 h-5" />
-              </div>
-              <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">{action.label}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

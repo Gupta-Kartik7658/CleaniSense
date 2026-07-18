@@ -42,7 +42,8 @@ export default function SettingsPage() {
     timezone: 'Asia/Kolkata',
     language: 'en',
     dateFormat: 'DD/MM/YYYY',
-    maintenanceMode: false
+    maintenanceMode: false,
+    autoForwardToMunicipality: false
   });
 
   const [notificationSettings, setNotificationSettings] = useState({
@@ -281,6 +282,18 @@ export default function SettingsPage() {
                     onChange={(e) => setGeneralSettings({ ...generalSettings, siteDescription: e.target.value })}
                     rows={3}
                     className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-md text-zinc-900 dark:text-zinc-100 outline-none focus:border-zinc-400 text-sm resize-none"
+                  />
+                </div>
+                <div className="md:col-span-2 flex items-center justify-between p-3 bg-zinc-50 dark:bg-zinc-950 rounded-md border border-zinc-150 dark:border-zinc-850">
+                  <div>
+                    <p className="text-xs font-bold text-zinc-900 dark:text-white">Auto Forward to Municipality</p>
+                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5">Automatically forward verified reports to the municipality after AI validation</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={generalSettings.autoForwardToMunicipality || false}
+                    onChange={(e) => setGeneralSettings({ ...generalSettings, autoForwardToMunicipality: e.target.checked })}
+                    className="h-4 w-4 rounded border-zinc-350 dark:border-zinc-800 text-zinc-950 focus:ring-0 cursor-pointer"
                   />
                 </div>
               </div>

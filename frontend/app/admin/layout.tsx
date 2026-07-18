@@ -36,7 +36,6 @@ const baseNavigation = [
   { name: 'Manage Users', href: '/admin/users', icon: Users },
   { name: 'Review Media', href: '/admin/media', icon: Eye },
   { name: 'Generate Report', href: '/admin/reports', icon: FileText },
-  { name: 'Incidents Map', href: '/admin/map', icon: MapPin },
   { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];

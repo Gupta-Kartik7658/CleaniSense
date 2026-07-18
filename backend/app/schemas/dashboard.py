@@ -29,6 +29,7 @@ class ComplaintMapData(BaseModel):
     hotspots: List[ComplaintHotspotCluster]
     total_complaints: int
     hotspot_radius_meters: float = 50.0
+    user_complaints: Optional[List[ComplaintMapPoint]] = None
 
 class CategoryResponse(BaseModel):
     id: uuid.UUID
@@ -89,4 +90,7 @@ class MunicipalityStatusActivityResponse(BaseModel):
 class MunicipalityDashboardResponse(BaseModel):
     overview: MunicipalityDashboardOverview
     recent_complaints: List[ComplaintResponse]
+    recent_reports: Optional[List[ComplaintResponse]] = None
     recent_activity: List[MunicipalityStatusActivityResponse]
+    complaint_map: Optional[ComplaintMapData] = None
+    nearby_hotspots: Optional[List[HotspotResponse]] = None
