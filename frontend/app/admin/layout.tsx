@@ -92,49 +92,53 @@ export default function AdminLayout({
 
   // Load all search targets (incidents, users, media)
   useEffect(() => {
-    const fallbackIncidents = [
-      { id: 'INC-1001', name: 'Industrial Smoke Emission', title: 'Industrial Smoke Emission', city: 'Mumbai', status: 'pending', severity: 'critical', desc: 'Thick smoke released from manufacturing plants.' },
-      { id: 'INC-1002', name: 'Illegal Garbage Dumping', title: 'Illegal Garbage Dumping', city: 'Delhi', status: 'investigating', severity: 'high', desc: 'Bulk construction debris dumped on main road.' },
-      { id: 'INC-1003', name: 'Chemical River Contamination', title: 'Chemical River Contamination', city: 'Bangalore', status: 'resolved', severity: 'critical', desc: 'Effluents released into community drinking channel.' },
-      { id: 'INC-1004', name: 'Construction Dust Pollution', title: 'Construction Dust Pollution', city: 'Chennai', status: 'dismissed', severity: 'low', desc: 'Silt and dust particles floating near sector block.' }
-    ];
-    const fallbackUsers = [
-      { id: '1', name: 'Rajesh Kumar', email: 'rajesh@email.com', role: 'admin', city: 'Mumbai' },
-      { id: '2', name: 'Priya Sharma', email: 'priya@email.com', role: 'moderator', city: 'Delhi' },
-      { id: '3', name: 'Amit Patel', email: 'amit@email.com', role: 'user', city: 'Bangalore' },
-      { id: '4', name: 'Sneha Gupta', email: 'sneha@email.com', role: 'user', city: 'Chennai' }
-    ];
-
     const fetchSearchData = async () => {
-      // Each call is independent — a failure in one won't abort the other
+      let realIncidents: any[] = [];
       try {
         const incRes = await PollutionService.getIncidents({ limit: 100 });
-        if (incRes?.incidents?.length) {
-          setAllIncidents(incRes.incidents);
+        if (incRes?.incidents) {
+          realIncidents = incRes.incidents;
+          setAllIncidents(realIncidents);
         } else {
-          setAllIncidents(fallbackIncidents);
+          setAllIncidents([]);
         }
       } catch {
-        setAllIncidents(fallbackIncidents);
+        setAllIncidents([]);
       }
 
       try {
         const userRes = await PollutionService.getUsers();
-        if (userRes?.users?.length) {
+        if (userRes?.users) {
           setAllUsers(userRes.users);
         } else {
-          setAllUsers(fallbackUsers);
+          setAllUsers([]);
         }
       } catch {
-        setAllUsers(fallbackUsers);
+        setAllUsers([]);
       }
 
-      setAllMedia([
-        { id: 'm1', name: 'Industrial Smoke Emission', type: 'image', sizeLabel: '830 KB', user: 'Rajesh K.' },
-        { id: 'm2', name: 'Illegal Garbage Dumping', type: 'video', sizeLabel: '4.3 MB', user: 'Priya S.' },
-        { id: 'm3', name: 'Chemical River Contamination', type: 'image', sizeLabel: '6.8 MB', user: 'Amit P.' },
-        { id: 'm4', name: 'Construction Dust Exhaust', type: 'video', sizeLabel: '2.3 MB', user: 'Sneha G.' }
-      ]);
+      // Extract real media attachments from database incidents
+      const derivedMedia: any[] = [];
+      realIncidents.forEach((inc: any) => {
+        const urls: string[] = inc.mediaUrls || (inc.imageUrl ? [inc.imageUrl] : []);
+        urls.forEach((url: string, uIdx: number) => {
+          derivedMedia.push({
+            id: `media-${inc.id}-${uIdx}`,
+            complaintId: inc.id,
+            name: inc.title || inc.name || `Report #${inc.id}`,
+            url: url,
+            type: url.match(/\.(mp4|webm|mov|ogg)$/i) ? 'video' : 'image',
+            user: inc.userName || inc.name || 'Reporter',
+            location: inc.location || inc.location_name || '',
+            categoryName: inc.category || '',
+            status: inc.status || '',
+            resolutionSummary: inc.resolutionSummary || inc.resolution_summary || '',
+            resolutionActions: inc.resolutionActions || inc.actions_performed || '',
+            assignedOfficer: inc.assignedOfficer || inc.officer_name || ''
+          });
+        });
+      });
+      setAllMedia(derivedMedia);
     };
     fetchSearchData();
   }, []);
@@ -147,23 +151,42 @@ export default function AdminLayout({
     const term = searchQuery.toLowerCase();
 
     const matchedIncidents = allIncidents.filter(inc => 
-      (inc.title && inc.title.toLowerCase().includes(term)) ||
-      (inc.name && inc.name.toLowerCase().includes(term)) ||
-      (inc.city && inc.city.toLowerCase().includes(term)) ||
-      (inc.id && inc.id.toLowerCase().includes(term))
+      (inc.title && String(inc.title).toLowerCase().includes(term)) ||
+      (inc.name && String(inc.name).toLowerCase().includes(term)) ||
+      (inc.city && String(inc.city).toLowerCase().includes(term)) ||
+      (inc.id && String(inc.id).toLowerCase().includes(term)) ||
+      (inc.description && String(inc.description).toLowerCase().includes(term)) ||
+      (inc.location && String(inc.location).toLowerCase().includes(term)) ||
+      (inc.category && String(inc.category).toLowerCase().includes(term)) ||
+      (inc.status && String(inc.status).toLowerCase().includes(term)) ||
+      (inc.officer_name && String(inc.officer_name).toLowerCase().includes(term)) ||
+      (inc.assigned_officer && String(inc.assigned_officer).toLowerCase().includes(term)) ||
+      (inc.resolution_summary && String(inc.resolution_summary).toLowerCase().includes(term)) ||
+      (inc.work_details && String(inc.work_details).toLowerCase().includes(term)) ||
+      (inc.actions && String(inc.actions).toLowerCase().includes(term))
     );
 
     const matchedUsers = allUsers.filter(u => 
-      (u.name && u.name.toLowerCase().includes(term)) ||
-      (u.email && u.email.toLowerCase().includes(term)) ||
-      (u.role && u.role.toLowerCase().includes(term)) ||
-      (u.city && u.city.toLowerCase().includes(term))
+      (u.name && String(u.name).toLowerCase().includes(term)) ||
+      (u.email && String(u.email).toLowerCase().includes(term)) ||
+      (u.role && String(u.role).toLowerCase().includes(term)) ||
+      (u.city && String(u.city).toLowerCase().includes(term)) ||
+      (u.phone && String(u.phone).toLowerCase().includes(term)) ||
+      (u.status && String(u.status).toLowerCase().includes(term)) ||
+      (u.department && String(u.department).toLowerCase().includes(term))
     );
 
     const matchedMedia = allMedia.filter(m => 
-      (m.name && m.name.toLowerCase().includes(term)) ||
-      (m.type && m.type.toLowerCase().includes(term)) ||
-      (m.user && m.user.toLowerCase().includes(term))
+      (m.name && String(m.name).toLowerCase().includes(term)) ||
+      (m.type && String(m.type).toLowerCase().includes(term)) ||
+      (m.user && String(m.user).toLowerCase().includes(term)) ||
+      (m.email && String(m.email).toLowerCase().includes(term)) ||
+      (m.location && String(m.location).toLowerCase().includes(term)) ||
+      (m.status && String(m.status).toLowerCase().includes(term)) ||
+      (m.categoryName && String(m.categoryName).toLowerCase().includes(term)) ||
+      (m.resolutionSummary && String(m.resolutionSummary).toLowerCase().includes(term)) ||
+      (m.resolutionActions && String(m.resolutionActions).toLowerCase().includes(term)) ||
+      (m.assignedOfficer && String(m.assignedOfficer).toLowerCase().includes(term))
     );
 
     return { incidents: matchedIncidents, users: matchedUsers, media: matchedMedia };

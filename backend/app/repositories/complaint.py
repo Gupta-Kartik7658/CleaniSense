@@ -108,11 +108,21 @@ class ComplaintRepository:
             query = query.filter(Complaint.category_id == category_id)
         if search:
             search_filter = f"%{search}%"
-            query = query.filter(
+            from app.models.resolution_report import ResolutionReport
+            from app.models.complaint_category import ComplaintCategory
+            query = query.outerjoin(Complaint.resolution).outerjoin(Complaint.category).filter(
                 or_(
                     Complaint.title.ilike(search_filter),
                     Complaint.location_name.ilike(search_filter),
-                    Complaint.description.ilike(search_filter)
+                    Complaint.description.ilike(search_filter),
+                    Complaint.status.ilike(search_filter),
+                    Complaint.severity.ilike(search_filter),
+                    Complaint.assigned_officer.ilike(search_filter),
+                    Complaint.assigned_department.ilike(search_filter),
+                    ComplaintCategory.name.ilike(search_filter),
+                    ResolutionReport.summary.ilike(search_filter),
+                    ResolutionReport.actions.ilike(search_filter),
+                    ResolutionReport.officer_name.ilike(search_filter)
                 )
             )
 

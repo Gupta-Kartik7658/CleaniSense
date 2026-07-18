@@ -28,7 +28,7 @@ function writeCache(data: DashboardData) {
   _cacheTimestamp = Date.now();
 }
 
-function invalidateCache() {
+export function invalidateDashboardCache() {
   _cachedData = null;
   _cacheTimestamp = null;
 }
@@ -111,25 +111,41 @@ export function useDashboard() {
         reportsCount: h.reports_count || 0,
       }));
 
-      // Hotspot map dataset (only hotspots near user reports)
-      const hotspotMapData = {
-        singles: [],
-        hotspots: hotspotsList.map((h: any) => ({
-          id: h.id,
-          latitude: h.latitude,
-          longitude: h.longitude,
-          count: h.reports_count || 2,
-          radius_meters: 50.0,
-          complaint_ids: [],
-          complaints: [],
-          dominant_category: h.dominant_category,
-        })),
-        total_complaints: hotspotsList.reduce(
-          (acc: number, curr: any) => acc + (curr.reports_count || 1),
-          0
-        ),
-        hotspot_radius_meters: 50.0,
-      };
+      // Hotspot map dataset — system-wide clusters for the HotspotSection mini-map
+      const hotspotMapRaw = backendData.hotspot_map || backendData.complaint_map || null;
+      const hotspotMapData = hotspotMapRaw
+        ? {
+            singles: (hotspotMapRaw.singles || []).map((s: any) => ({
+              id: String(s.id),
+              latitude: Number(s.latitude),
+              longitude: Number(s.longitude),
+              title: s.title || "Report",
+              status: s.status || "submitted",
+              location_name: s.location_name || "",
+              category_name: s.category_name || null,
+            })),
+            hotspots: (hotspotMapRaw.hotspots || []).map((h: any) => ({
+              id: String(h.id),
+              latitude: Number(h.latitude),
+              longitude: Number(h.longitude),
+              count: Number(h.count || 2),
+              radius_meters: Number(h.radius_meters || 1000),
+              complaint_ids: (h.complaint_ids || []).map(String),
+              complaints: (h.complaints || []).map((c: any) => ({
+                id: String(c.id),
+                latitude: Number(c.latitude),
+                longitude: Number(c.longitude),
+                title: c.title || "Report",
+                status: c.status || "submitted",
+                location_name: c.location_name || "",
+                category_name: c.category_name || null,
+              })),
+              dominant_category: h.dominant_category || null,
+            })),
+            total_complaints: Number(hotspotMapRaw.total_complaints || 0),
+            hotspot_radius_meters: Number(hotspotMapRaw.hotspot_radius_meters || 1000),
+          }
+        : { singles: [], hotspots: [], total_complaints: 0, hotspot_radius_meters: 1000 };
 
       const formattedData: DashboardData = {
         summary: [
@@ -160,13 +176,15 @@ export function useDashboard() {
         ],
         reports: mappedReports,
         hotspots: mappedHotspots,
+        // complaintMap = user's own complaints (for ComplaintMapSection - personal pins)
         complaintMap: backendData.complaint_map || {
           singles: [],
           hotspots: [],
           total_complaints: 0,
-          hotspot_radius_meters: 50.0,
+          hotspot_radius_meters: 1000.0,
         },
-        hotspotMap: backendData.complaint_map || hotspotMapData,
+        // hotspotMap = system-wide cluster data (for HotspotSection mini-map)
+        hotspotMap: hotspotMapData,
         unreadNotifications: backendData.unread_notifications || 0,
       };
 
@@ -177,10 +195,12 @@ export function useDashboard() {
       setLastUpdated(new Date());
       setError(null);
     } catch (err: any) {
-      if (err.name !== "CanceledError" && err.name !== "AbortError") {
-        setError(err.message || "Failed to load dashboard data. Please try again.");
+      // On abort (navigation away), don't clear data or show an error — just stop loading
+      if (err.name === "CanceledError" || err.name === "AbortError") {
+        setLoading(false);
+        return;
       }
-    } finally {
+      setError(err.message || "Failed to load dashboard data. Please try again.");
       setLoading(false);
     }
   }, []);
@@ -196,7 +216,7 @@ export function useDashboard() {
 
   /** Force a full refresh ignoring the cache (e.g. after submitting a new report) */
   const refreshDashboard = useCallback(() => {
-    invalidateCache();
+    invalidateDashboardCache();
     fetchDashboardData(undefined, true);
   }, [fetchDashboardData]);
 

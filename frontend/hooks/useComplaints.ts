@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import axios from "axios";
 import { complaintService, ComplaintsQueryResponse } from "../services/complaint";
 import { ComplaintDetailResponse, ComplaintCreatePayload, ResolutionResponse } from "../types/complaint";
+import { invalidateDashboardCache } from "./useDashboard";
 
 export function useComplaints() {
   const [loading, setLoading] = useState(false);
@@ -31,15 +32,19 @@ export function useComplaints() {
       setError(null);
       setComplaintsData(data);
     } catch (err: any) {
-      if (axios.isCancel(err)) return;
+      // On abort, silently stop loading but keep existing data in place
+      if (axios.isCancel(err) || err?.name === 'CanceledError' || err?.name === 'AbortError') {
+        setLoading(false);
+        return;
+      }
       setError(err.message || "Failed to fetch complaints list.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  const fetchDetail = useCallback(async (id: string, signal?: AbortSignal) => {
-    setLoading(true);
+  const fetchDetail = useCallback(async (id: string, signal?: AbortSignal, isSilent = false) => {
+    if (!isSilent) setLoading(true);
     setError(null);
     try {
       const detail = await complaintService.getComplaintDetail(id, signal);
@@ -61,7 +66,7 @@ export function useComplaints() {
       if (axios.isCancel(err)) return;
       setError(err.message || "Failed to load complaint detail.");
     } finally {
-      setLoading(false);
+      if (!isSilent) setLoading(false);
     }
   }, []);
 
@@ -73,6 +78,7 @@ export function useComplaints() {
     setError(null);
     try {
       const complaint = await complaintService.createComplaint(payload, attachments);
+      invalidateDashboardCache();
       return complaint;
     } catch (err: any) {
       setError(err.message || "Failed to submit complaint.");
@@ -87,6 +93,7 @@ export function useComplaints() {
     setError(null);
     try {
       await complaintService.deleteComplaint(id);
+      invalidateDashboardCache();
     } catch (err: any) {
       setError(err.message || "Failed to delete complaint.");
       throw err;

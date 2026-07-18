@@ -176,6 +176,17 @@ def get_complaint_detail(
     """
     logger.info(f"Fetching complaint detail — id={id} user={current_user.id}")
     complaint = complaint_service.get_complaint(db, id, current_user)
+    
+    # Enrich resolution after_image_url dynamically if it is a Supabase storage path
+    if complaint.resolution and complaint.resolution.after_image_url and not complaint.resolution.after_image_url.startswith("http"):
+        complaint.resolution.after_image_url = storage_service.storage_client.get_public_url(complaint.resolution.after_image_url)
+
+    # Refresh complaint attachments signed URLs to ensure they never expire
+    for att in complaint.attachments:
+        fresh = storage_service.get_public_url(att)
+        if fresh:
+            att.public_url = fresh
+
     detail_data = ComplaintDetailResponse.model_validate(complaint)
     return standard_response(
         success=True,
@@ -291,6 +302,16 @@ def get_complaint_resolution(
             detail="Resolution report not found for this complaint"
         )
     
+    # Enrich resolution after_image_url & before_image_url dynamically if they are Supabase storage paths
+    if complaint.resolution.after_image_url and not complaint.resolution.after_image_url.startswith("http"):
+        complaint.resolution.after_image_url = storage_service.storage_client.get_public_url(complaint.resolution.after_image_url)
+
+    if complaint.resolution.before_image_url and not complaint.resolution.before_image_url.startswith("http"):
+        complaint.resolution.before_image_url = storage_service.storage_client.get_public_url(complaint.resolution.before_image_url)
+    elif not complaint.resolution.before_image_url and complaint.attachments and len(complaint.attachments) > 0:
+        fresh_before = storage_service.get_public_url(complaint.attachments[0])
+        complaint.resolution.before_image_url = fresh_before or complaint.attachments[0].public_url
+
     resolution_data = ResolutionResponse.model_validate(complaint.resolution)
     return standard_response(
         success=True,

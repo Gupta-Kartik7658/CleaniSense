@@ -65,8 +65,7 @@ export default function MediaPage() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Custom multi-filter states
-  const [selectedSize, setSelectedSize] = useState('all');
-  const [selectedLength, setSelectedLength] = useState('all');
+  const [selectedIssueType, setSelectedIssueType] = useState('all');
   const [selectedDate, setSelectedDate] = useState('all');
 
   const [mediaList, setMediaList] = useState<any[]>([]);
@@ -78,7 +77,50 @@ export default function MediaPage() {
       setToast(null);
     }, 4000);
   };
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolveSummary, setResolveSummary] = useState("");
+  const [resolveActions, setResolveActions] = useState("");
+  const [resolveFile, setResolveFile] = useState<File | null>(null);
+  const [resolvingLoading, setResolvingLoading] = useState(false);
 
+  const handleResolveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!previewMedia) return;
+    if (!resolveSummary.trim()) {
+      showNotification('Please enter a resolution summary.', 'error');
+      return;
+    }
+    if (!resolveActions.trim()) {
+      showNotification('Please enter work details & actions performed.', 'error');
+      return;
+    }
+    if (!resolveFile) {
+      showNotification('Please select a photo evidence for the resolution.', 'error');
+      return;
+    }
+
+    setResolvingLoading(true);
+    try {
+      await PollutionService.resolveIncident(
+        previewMedia.complaintId || previewMedia.id,
+        resolveSummary,
+        resolveActions,
+        resolveFile
+      );
+      showNotification('Complaint marked as resolved successfully.', 'success');
+      setShowResolveModal(false);
+      setResolveSummary("");
+      setResolveActions("");
+      setResolveFile(null);
+      setPreviewMedia(null);
+      loadMediaData();
+    } catch (err: any) {
+      console.error('Failed to resolve complaint:', err);
+      showNotification(err.message || 'Failed to mark complaint as resolved.', 'error');
+    } finally {
+      setResolvingLoading(false);
+    }
+  };
   useEffect(() => {
     loadMediaData();
   }, []);
@@ -91,6 +133,12 @@ export default function MediaPage() {
 
       const attachmentsList: any[] = [];
       incidents.forEach((item: any) => {
+        const catName = item.categoryName || item.category || item.category_name || 'Environmental';
+        const resSum = item.resolution?.summary || item.resolutionSummary || '';
+        const resAct = item.resolution?.actions || item.resolutionActions || '';
+        const officer = item.assignedOfficer || item.assigned_officer || item.resolution?.officer_name || '';
+        const fullDesc = item.description || item.short_description || item.title || '';
+
         const mediaUrls = item.mediaUrls || [];
         if (mediaUrls.length > 0) {
           mediaUrls.forEach((url: string, idx: number) => {
@@ -109,6 +157,12 @@ export default function MediaPage() {
               date: item.reportedAt ? new Date(item.reportedAt).toLocaleDateString() : new Date().toLocaleDateString(),
               severity: item.severity?.toLowerCase() || 'medium',
               status: item.status || 'submitted',
+              categoryName: catName,
+              resolutionSummary: resSum,
+              resolutionActions: resAct,
+              assignedOfficer: officer,
+              fullDescription: fullDesc,
+              rawIncident: item,
               sizeInBytes: 800000,
               sizeLabel: '800 KB',
               durationInSeconds: null,
@@ -132,6 +186,12 @@ export default function MediaPage() {
             date: item.reportedAt ? new Date(item.reportedAt).toLocaleDateString() : new Date().toLocaleDateString(),
             severity: item.severity?.toLowerCase() || 'medium',
             status: item.status || 'submitted',
+            categoryName: catName,
+            resolutionSummary: resSum,
+            resolutionActions: resAct,
+            assignedOfficer: officer,
+            fullDescription: fullDesc,
+            rawIncident: item,
             sizeInBytes: 500000,
             sizeLabel: '500 KB',
             durationInSeconds: null,
@@ -150,15 +210,20 @@ export default function MediaPage() {
   };
 
   const checkApprovedStatus = (status: string) => {
-    const s = status.toLowerCase();
-    return s === 'municipality_accepted' || s === 'officer_assigned' || s === 'in_progress' || s === 'resolved' || s === 'investigating';
+    const s = (status || '').toLowerCase();
+    return s === 'municipality_accepted' || s === 'officer_assigned' || s === 'in_progress' || s === 'investigating' || s === 'approved';
+  };
+
+  const checkResolvedStatus = (status: string) => {
+    const s = (status || '').toLowerCase();
+    return s === 'resolved';
   };
 
   const stats = [
     { label: 'Total Media', value: mediaList.length, icon: Image, color: 'text-blue-500', bg: 'from-blue-500/10 to-blue-600/10' },
     { label: 'Pending Review', value: mediaList.filter(m => m.status === 'submitted' || m.status === 'ai_verification_in_progress' || m.status === 'pending').length, icon: Clock, color: 'text-yellow-500', bg: 'from-yellow-500/10 to-yellow-600/10' },
     { label: 'Flagged Logs', value: mediaList.filter(m => m.status === 'rejected' || m.status === 'dismissed').length, icon: Flag, color: 'text-red-500', bg: 'from-red-500/10 to-red-600/10' },
-    { label: 'Approved Media', value: mediaList.filter(m => checkApprovedStatus(m.status)).length, icon: Check, color: 'text-emerald-555', bg: 'from-green-500/10 to-green-600/10' },
+    { label: 'Resolved Reports', value: mediaList.filter(m => checkResolvedStatus(m.status)).length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'from-emerald-500/10 to-emerald-600/10' },
   ];
 
   const handleBulkAction = async (action: 'approve' | 'flag' | 'delete') => {
@@ -217,14 +282,20 @@ export default function MediaPage() {
   };
 
   const getStatusColor = (status: string) => {
-    if (checkApprovedStatus(status)) {
+    const s = (status || '').toLowerCase();
+    if (s === 'resolved') {
       return 'bg-emerald-50 dark:bg-emerald-955/20 text-emerald-700 dark:text-emerald-400 border-emerald-250';
     }
-    switch (status) {
+    if (checkApprovedStatus(s)) {
+      return 'bg-blue-50 dark:bg-blue-955/20 text-blue-700 dark:text-blue-400 border-blue-250';
+    }
+    switch (s) {
       case 'submitted':
       case 'ai_verification_in_progress':
+      case 'pending':
         return 'bg-amber-50 dark:bg-amber-955/20 text-amber-750 dark:text-amber-400 border-amber-250';
       case 'rejected':
+      case 'dismissed':
         return 'bg-red-50 dark:bg-red-955/20 text-red-700 dark:text-red-400 border-red-205';
       default:
         return 'bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-400 border-zinc-205';
@@ -233,49 +304,70 @@ export default function MediaPage() {
 
   // Multiple active filters processor
   const processedMedia = mediaList.filter(item => {
-    // 1. Search filter
-    const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.user.toLowerCase().includes(searchTerm.toLowerCase());
+    // 1. Comprehensive Search filter across ALL report aspects
+    const term = searchTerm.trim().toLowerCase();
+    let matchesSearch = true;
+    if (term) {
+      matchesSearch = (
+        (item.name || '').toLowerCase().includes(term) ||
+        (item.location || '').toLowerCase().includes(term) ||
+        (item.user || '').toLowerCase().includes(term) ||
+        (item.email || '').toLowerCase().includes(term) ||
+        (item.status || '').toLowerCase().includes(term) ||
+        (item.severity || '').toLowerCase().includes(term) ||
+        (item.categoryName || '').toLowerCase().includes(term) ||
+        (item.fullDescription || '').toLowerCase().includes(term) ||
+        (item.resolutionSummary || '').toLowerCase().includes(term) ||
+        (item.resolutionActions || '').toLowerCase().includes(term) ||
+        (item.assignedOfficer || '').toLowerCase().includes(term)
+      );
+    }
 
     // 2. Type/Status filter
     const matchesTypeStatus = filter === 'all' ||
       (filter === 'image' && item.type === 'image') ||
       (filter === 'video' && item.type === 'video') ||
-      (filter === 'pending' && (item.status === 'submitted' || item.status === 'ai_verification_in_progress')) ||
+      (filter === 'pending' && (item.status === 'submitted' || item.status === 'ai_verification_in_progress' || item.status === 'pending')) ||
       (filter === 'approved' && checkApprovedStatus(item.status)) ||
-      (filter === 'flagged' && item.status === 'rejected');
+      (filter === 'resolved' && checkResolvedStatus(item.status)) ||
+      (filter === 'flagged' && (item.status === 'rejected' || item.status === 'dismissed'));
 
-    // 3. Size Filter
-    let matchesSize = true;
-    if (selectedSize === 'small') matchesSize = item.sizeInBytes < 1048576; // < 1MB
-    else if (selectedSize === 'medium') matchesSize = item.sizeInBytes >= 1048576 && item.sizeInBytes <= 5242880; // 1MB-5MB
-    else if (selectedSize === 'large') matchesSize = item.sizeInBytes > 5242880; // > 5MB
-
-    // 4. Video Duration Length Filter
-    let matchesLength = true;
-    if (selectedLength !== 'all') {
-      if (item.type !== 'video') {
-        matchesLength = false;
+    // 3. Issue Type / Category Filter
+    let matchesIssueType = true;
+    if (selectedIssueType !== 'all') {
+      const cat = (item.categoryName || '').toLowerCase();
+      const sel = selectedIssueType.toLowerCase();
+      if (sel === 'land') {
+        matchesIssueType = cat.includes('land') || cat.includes('waste') || cat.includes('garbage');
       } else {
-        const duration = item.durationInSeconds || 0;
-        if (selectedLength === 'short') matchesLength = duration < 15;
-        else if (selectedLength === 'medium') matchesLength = duration >= 15 && duration <= 60;
-        else if (selectedLength === 'long') matchesLength = duration > 60;
+        matchesIssueType = cat.includes(sel);
       }
     }
 
-    // 5. Upload Date Filter
+    // 4. Filter by Time / Upload Date
     let matchesDate = true;
     if (selectedDate !== 'all') {
-      const uploadTime = new Date(item.uploadTimestamp).getTime();
-      const diffDays = (Date.now() - uploadTime) / (1000 * 3600 * 24);
-      if (selectedDate === 'today') matchesDate = diffDays <= 1;
-      else if (selectedDate === 'week') matchesDate = diffDays <= 7;
-      else if (selectedDate === 'month') matchesDate = diffDays <= 30;
+      const rawDateStr = item.uploadTimestamp || item.reportedAt || item.date;
+      const uploadTime = rawDateStr ? new Date(rawDateStr).getTime() : NaN;
+      if (!isNaN(uploadTime)) {
+        const now = Date.now();
+        const diffMs = now - uploadTime;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+        if (selectedDate === 'today') {
+          matchesDate = diffHours <= 24;
+        } else if (selectedDate === 'week') {
+          matchesDate = diffDays <= 7;
+        } else if (selectedDate === 'month') {
+          matchesDate = diffDays <= 30;
+        } else if (selectedDate === 'older') {
+          matchesDate = diffDays > 30;
+        }
+      }
     }
 
-    return matchesSearch && matchesTypeStatus && matchesSize && matchesLength && matchesDate;
+    return matchesSearch && matchesTypeStatus && matchesIssueType && matchesDate;
   });
 
   const handleExportSelected = async () => {
@@ -452,7 +544,7 @@ Time: ${new Date().toLocaleString()}
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4.5 w-4.5 text-zinc-400 dark:text-zinc-500" />
             <input
               type="text"
-              placeholder="Search by name, location, or reporter..."
+              placeholder="Search across all fields: title, location, reporter, officer, resolution summary..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-white dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:border-zinc-455 shadow-sm"
@@ -461,65 +553,54 @@ Time: ${new Date().toLocaleString()}
 
           {/* Quick Filters */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Category / Type */}
+            {/* Status & Media Type */}
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-bold dark:text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Type:</span>
+              <span className="font-bold dark:text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Status:</span>
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none"
+                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
               >
-                <option value="all">All Items</option>
+                <option value="all">All Statuses & Types</option>
+                <option value="pending">Pending Review</option>
+                <option value="approved">Approved Only</option>
+                <option value="resolved">Resolved Only</option>
+                <option value="flagged">Flagged / Rejected</option>
                 <option value="image">Images Only</option>
                 <option value="video">Videos Only</option>
-                <option value="pending">Pending review</option>
-                <option value="approved">Approved only</option>
-                <option value="flagged">Flagged logs</option>
               </select>
             </div>
 
-            {/* Size Filter */}
+            {/* Issue Type Filter */}
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-bold dark:text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Size:</span>
+              <span className="font-bold dark:text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Issue Type:</span>
               <select
-                value={selectedSize}
-                onChange={(e) => setSelectedSize(e.target.value)}
-                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none"
+                value={selectedIssueType}
+                onChange={(e) => setSelectedIssueType(e.target.value)}
+                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
               >
-                <option value="all">All Sizes</option>
-                <option value="small">Small (&lt; 1 MB)</option>
-                <option value="medium">Medium (1 MB - 5 MB)</option>
-                <option value="large">Large (&gt; 5 MB)</option>
+                <option value="all">All Issue Types</option>
+                <option value="air">Air Pollution</option>
+                <option value="water">Water Pollution</option>
+                <option value="land">Land & Waste</option>
+                <option value="noise">Noise Pollution</option>
+                <option value="other">General / Other</option>
               </select>
             </div>
 
-            {/* Video Length Filter */}
+            {/* Filter by Time */}
             <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-bold dark:text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Length:</span>
-              <select
-                value={selectedLength}
-                onChange={(e) => setSelectedLength(e.target.value)}
-                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none"
-              >
-                <option value="all">All Durations</option>
-                <option value="short">Short (&lt; 15s)</option>
-                <option value="medium">Medium (15s - 60s)</option>
-                <option value="long">Long (&gt; 60s)</option>
-              </select>
-            </div>
-
-            {/* Upload Date Filter */}
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Upload Date:</span>
+              <span className="font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Time:</span>
               <select
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none"
+                className="px-2.5 py-1.5 bg-zinc-50 dark:bg-zinc-955 border border-zinc-200 dark:border-zinc-800 rounded-md font-bold text-zinc-700 dark:text-zinc-300 outline-none cursor-pointer"
               >
-                <option value="all">All Times</option>
-                <option value="today">Today Only</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
+                <option value="all">All Time</option>
+                <option value="today">Today / Last 24h</option>
+                <option value="week">Past 7 Days</option>
+                <option value="month">Past 30 Days</option>
+                <option value="older">Older</option>
               </select>
             </div>
           </div>
@@ -590,13 +671,14 @@ Time: ${new Date().toLocaleString()}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-left max-h-[750px] overflow-y-auto pr-1">
           {processedMedia.map((item) => {
             const isChecked = selectedMedia.includes(item.id);
+            const isResolved = checkResolvedStatus(item.status);
             const isApproved = checkApprovedStatus(item.status);
-            const isRejected = item.status === 'rejected';
+            const isRejected = item.status === 'rejected' || item.status === 'dismissed';
             return (
               <div
                 key={item.id}
                 className={`rounded-lg border bg-white dark:bg-zinc-900 overflow-hidden hover:shadow-md transition-all group flex flex-col justify-between ${isChecked
-                    ? 'border-zinc-950 dark:border-white shadow-sm'
+                    ? 'border-zinc-955 dark:border-white shadow-sm'
                     : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-350 dark:hover:border-zinc-700'
                   }`}
               >
@@ -632,17 +714,26 @@ Time: ${new Date().toLocaleString()}
                     </span>
                   </div>
 
-                  {/* Approved Tag on Top Left in Green if approved */}
-                  {isApproved && (
+                  {/* Resolved Tag on Top Left in Emerald if resolved */}
+                  {isResolved && (
                     <div className="absolute top-2 left-2 z-10">
                       <span className="px-1.5 py-0.5 text-[9px] font-bold rounded border bg-emerald-50 text-emerald-800 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900 uppercase">
+                        Resolved
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Approved Tag on Top Left in Blue if approved */}
+                  {!isResolved && isApproved && (
+                    <div className="absolute top-2 left-2 z-10">
+                      <span className="px-1.5 py-0.5 text-[9px] font-bold rounded border bg-blue-50 text-blue-800 border-blue-250 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900 uppercase">
                         Approved
                       </span>
                     </div>
                   )}
 
                   {/* Rejected Tag on Top Left in Red if rejected */}
-                  {isRejected && (
+                  {!isResolved && isRejected && (
                     <div className="absolute top-2 left-2 z-10">
                       <span className="px-1.5 py-0.5 text-[9px] font-bold rounded border bg-rose-50 text-rose-805 border-rose-200 dark:bg-rose-955/20 dark:text-rose-400 dark:border-rose-900 uppercase">
                         Rejected
@@ -650,7 +741,7 @@ Time: ${new Date().toLocaleString()}
                     </div>
                   )}
 
-                  {!isApproved && !isRejected && (
+                  {!isResolved && !isApproved && !isRejected && (
                     /* Select Checkbox */
                     <button
                       onClick={() => {
@@ -681,7 +772,7 @@ Time: ${new Date().toLocaleString()}
 
                 <div className="p-4 flex-1 flex flex-col justify-between">
                   <div>
-                    <h3 className="font-bold text-zinc-950 dark:text-white text-sm truncate">{item.name}</h3>
+                    <h3 className="font-bold text-zinc-955 dark:text-white text-sm truncate">{item.name}</h3>
                     <div className="flex items-center gap-1.5 mt-1 text-xs text-zinc-500 dark:text-zinc-400 font-medium">
                       <MapPin className="h-3 w-3 shrink-0 text-zinc-400" />
                       <span className="truncate">{item.location}</span>
@@ -696,17 +787,17 @@ Time: ${new Date().toLocaleString()}
                   </div>
                 </div>
 
-                {/* Inline Action Triggers (Show Preview, Approve, Reject according to status) */}
+                {/* Inline Action Triggers */}
                 <div className="flex border-t border-zinc-150 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
                   <button
                     onClick={() => setPreviewMedia(item)}
-                    className="flex-1 py-2 text-xs font-bold dark:text-zinc-400 dark:text-zinc-300 hover:text-zinc-950 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                    className="flex-1 py-2 text-xs font-bold dark:text-zinc-400 dark:text-zinc-300 hover:text-zinc-955 dark:hover:text-white hover:bg-zinc-100/50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-1 cursor-pointer"
                   >
                     <Eye className="h-3.5 w-3.5" />
                     Preview
                   </button>
 
-                  {!isApproved && (
+                  {!isResolved && !isApproved && (
                     <button
                       onClick={() => handleSingleAction(item.id, 'approve')}
                       className="flex-1 py-2 text-xs font-bold dark:text-zinc-400 dark:text-zinc-300 hover:text-emerald-650 hover:bg-emerald-500/5 transition-colors flex items-center justify-center gap-1 border-l border-zinc-150 dark:border-zinc-800 cursor-pointer"
@@ -716,7 +807,7 @@ Time: ${new Date().toLocaleString()}
                     </button>
                   )}
 
-                  {!isRejected && (
+                  {!isResolved && !isRejected && (
                     <button
                       onClick={() => handleSingleAction(item.id, 'reject')}
                       className="flex-1 py-2 text-xs font-bold dark:text-zinc-400 dark:text-zinc-305 hover:text-red-650 hover:bg-red-500/5 transition-colors flex items-center justify-center gap-1 border-l border-zinc-150 dark:border-zinc-800 cursor-pointer"
@@ -750,8 +841,9 @@ Time: ${new Date().toLocaleString()}
               </thead>
               <tbody className="divide-y divide-zinc-150 dark:divide-zinc-800">
                 {processedMedia.map((item) => {
+                  const isResolved = checkResolvedStatus(item.status);
                   const isApproved = checkApprovedStatus(item.status);
-                  const isRejected = item.status === 'rejected';
+                  const isRejected = item.status === 'rejected' || item.status === 'dismissed';
                   return (
                     <tr key={item.id} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-950/30 transition-colors">
                       <td className="px-6 py-4">
@@ -790,7 +882,7 @@ Time: ${new Date().toLocaleString()}
                           >
                             <Eye className="h-4 w-4" />
                           </button>
-                          {!isApproved && (
+                          {!isResolved && !isApproved && (
                             <button
                               onClick={() => handleSingleAction(item.id, 'approve')}
                               className="p-1.5 text-zinc-500 hover:text-green-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
@@ -798,7 +890,7 @@ Time: ${new Date().toLocaleString()}
                               <Check className="h-4 w-4" />
                             </button>
                           )}
-                          {!isRejected && (
+                          {!isResolved && !isRejected && (
                             <button
                               onClick={() => handleSingleAction(item.id, 'reject')}
                               className="p-1.5 text-zinc-500 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded transition-colors cursor-pointer"
@@ -819,8 +911,9 @@ Time: ${new Date().toLocaleString()}
 
       {/* Floating Preview Modal Overlay (Larger with Map Canvas & Details) */}
       {previewMedia && (() => {
+        const isResolved = checkResolvedStatus(previewMedia.status);
         const isApproved = checkApprovedStatus(previewMedia.status);
-        const isRejected = previewMedia.status === 'rejected';
+        const isRejected = previewMedia.status === 'rejected' || previewMedia.status === 'dismissed';
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/80 backdrop-blur-xs" onClick={() => setPreviewMedia(null)} />
@@ -831,12 +924,17 @@ Time: ${new Date().toLocaleString()}
                   <span className={`px-2 py-0.5 text-[10px] font-bold rounded border capitalize ${getSeverityColor(previewMedia.severity)}`}>
                     {previewMedia.severity} Severity
                   </span>
-                  {isApproved && (
+                  {isResolved && (
                     <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-emerald-50 text-emerald-800 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900 uppercase">
+                      Resolved
+                    </span>
+                  )}
+                  {!isResolved && isApproved && (
+                    <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-blue-50 text-blue-800 border-blue-250 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900 uppercase">
                       Approved
                     </span>
                   )}
-                  {isRejected && (
+                  {!isResolved && isRejected && (
                     <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-955/20 dark:text-rose-400 dark:border-rose-900 uppercase">
                       Rejected
                     </span>
@@ -853,22 +951,28 @@ Time: ${new Date().toLocaleString()}
               {/* Modal Content - Expanded 3 Columns Grid */}
               <div className="grid grid-cols-1 lg:grid-cols-3">
                 {/* Column 1: Media viewer panel */}
-                <div className="bg-zinc-950 flex items-center justify-center aspect-video lg:aspect-auto lg:h-[450px] relative">
-                  {previewMedia.type === 'video' ? (
-                    <video
-                      src={previewMedia.url}
-                      controls
-                      autoPlay
-                      className="w-full h-full object-contain"
-                    />
-                  ) : (
-                    <img
-                      src={previewMedia.url}
-                      alt={previewMedia.name}
-                      onError={handleImageError}
-                      className="w-full h-full object-contain"
-                    />
-                  )}
+                <div className="p-4 bg-zinc-950 flex flex-col justify-between items-center relative min-h-[350px]">
+                  <div className="relative w-full h-full flex items-center justify-center">
+                    {previewMedia.type === 'video' ? (
+                      <video
+                        src={previewMedia.url}
+                        controls
+                        autoPlay
+                        className="max-h-[380px] w-auto rounded object-contain"
+                      />
+                    ) : (
+                      <img
+                        src={previewMedia.url}
+                        alt={previewMedia.name}
+                        onError={handleImageError}
+                        className="max-h-[380px] w-auto rounded object-contain"
+                      />
+                    )}
+                  </div>
+                  <div className="w-full mt-3 flex items-center justify-between text-[11px] font-semibold text-zinc-400 border-t border-zinc-800 pt-2">
+                    <span>Type: {previewMedia.type}</span>
+                    <span>Report ID: {(previewMedia.complaintId || previewMedia.id).slice(0, 8)}</span>
+                  </div>
                 </div>
 
                 {/* Column 2: Live Leaflet Map showing coordinates */}
@@ -919,8 +1023,8 @@ Time: ${new Date().toLocaleString()}
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">File Size</span>
-                        <p className="text-xs font-bold dark:text-zinc-200 mt-0.5">{previewMedia.sizeLabel}</p>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Issue Category</span>
+                        <p className="text-xs font-bold dark:text-zinc-200 mt-0.5 capitalize">{previewMedia.categoryName || 'Environmental'}</p>
                       </div>
                       <div>
                         <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Review Status</span>
@@ -935,11 +1039,45 @@ Time: ${new Date().toLocaleString()}
                         <span>{previewMedia.location}</span>
                       </p>
                     </div>
+
+                    {/* Government Resolution Report Details */}
+                    {(isResolved || previewMedia.resolutionSummary) && (
+                      <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-2 text-left mt-2">
+                        <div className="flex items-center justify-between border-b border-emerald-200/60 dark:border-emerald-800/40 pb-1.5">
+                          <span className="text-[10px] font-extrabold uppercase text-emerald-800 dark:text-emerald-400 tracking-wider">
+                            Government Resolution Info
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+                            Officer: {previewMedia.assignedOfficer || previewMedia.rawIncident?.resolution?.officer_name || previewMedia.rawIncident?.assigned_officer || 'Municipal Officer'}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-500 font-bold block">Resolution Summary:</span>
+                          <p className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                            {previewMedia.resolutionSummary || previewMedia.rawIncident?.resolution?.summary || 'Issue resolved successfully by municipal team.'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-zinc-500 font-bold block">Work Details & Actions Performed:</span>
+                          <p className="text-xs text-zinc-700 dark:text-zinc-300">
+                            {previewMedia.resolutionActions || previewMedia.rawIncident?.resolution?.actions || 'Field inspection conducted and remedial measures completed.'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Action buttons (Show Approve, Reject, and Delete inside the modal) */}
+                  {/* Action buttons */}
                   <div className="border-t border-zinc-150 dark:border-zinc-800 pt-4 mt-4 flex items-center gap-2">
-                    {!isApproved && (
+                    {!isResolved && !isRejected && (
+                      <button
+                        onClick={() => setShowResolveModal(true)}
+                        className="flex-1 py-2.5 bg-blue-50 dark:bg-blue-955/20 text-blue-705 dark:text-blue-400 hover:bg-blue-100 border border-blue-200 text-xs font-bold rounded-md transition-colors cursor-pointer text-center"
+                      >
+                        Mark Resolved
+                      </button>
+                    )}
+                    {!isResolved && !isApproved && !isRejected && (
                       <button
                         onClick={() => handleSingleAction(previewMedia.id, 'approve')}
                         className="flex-1 py-2.5 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-700 dark:text-emerald-450 hover:bg-emerald-100 border border-emerald-250 text-xs font-bold rounded-md transition-colors cursor-pointer text-center"
@@ -947,7 +1085,7 @@ Time: ${new Date().toLocaleString()}
                         Approve
                       </button>
                     )}
-                    {!isRejected && (
+                    {!isResolved && !isRejected && !isApproved && (
                       <button
                         onClick={() => handleSingleAction(previewMedia.id, 'reject')}
                         className="flex-1 py-2.5 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 hover:bg-red-100 border border-red-200 text-xs font-bold rounded-md transition-colors cursor-pointer text-center"
@@ -969,6 +1107,105 @@ Time: ${new Date().toLocaleString()}
           </div>
         );
       })()}
+
+      {/* Resolve Modal Overlay */}
+      {showResolveModal && previewMedia && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setShowResolveModal(false)} />
+          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl w-full max-w-md text-left z-10 p-6 animate-scale-in space-y-4">
+            <div>
+              <h3 className="text-sm font-extrabold text-zinc-950 dark:text-white uppercase tracking-widest">
+                Resolve Incident Report
+              </h3>
+              <p className="text-[10px] text-zinc-550 dark:text-zinc-400 mt-1">
+                Provide the final resolution summary and upload photo evidence. Both fields are mandatory.
+              </p>
+            </div>
+
+            <form onSubmit={handleResolveSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block">
+                  Resolution Summary <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="E.g., Garbage cleared & site sanitized"
+                  value={resolveSummary}
+                  onChange={(e) => setResolveSummary(e.target.value)}
+                  required
+                  className="w-full text-xs border border-zinc-200 dark:border-zinc-750 rounded-lg p-2.5 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block">
+                  Work Details & Actions Performed <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  placeholder="Describe detailed inspection findings, personnel dispatched, equipment used, and outcome..."
+                  rows={3}
+                  value={resolveActions}
+                  onChange={(e) => setResolveActions(e.target.value)}
+                  required
+                  className="w-full text-xs border border-zinc-200 dark:border-zinc-750 rounded-lg p-2.5 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block">
+                  Resolution Photo Evidence <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative border border-dashed border-zinc-300 dark:border-zinc-800 hover:border-emerald-600 rounded-lg p-4 text-center cursor-pointer">
+                  <input
+                    type="file"
+                    required
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setResolveFile(e.target.files[0]);
+                      }
+                    }}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    accept="image/*"
+                  />
+                  {resolveFile ? (
+                    <div className="text-[11px] font-semibold text-emerald-650 dark:text-emerald-450 truncate">
+                      Selected: {resolveFile.name}
+                    </div>
+                  ) : (
+                    <div>
+                      <span className="text-sm block">📸</span>
+                      <span className="text-[10px] text-zinc-500 block">Click to select photo</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResolveModal(false);
+                    setResolveSummary("");
+                    setResolveActions("");
+                    setResolveFile(null);
+                  }}
+                  className="px-4 py-2 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-md cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={resolvingLoading}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                >
+                  {resolvingLoading && <RefreshCw className="h-3 w-3 animate-spin" />}
+                  Confirm Resolve
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* In-App Toast Notification */}
       {toast && (

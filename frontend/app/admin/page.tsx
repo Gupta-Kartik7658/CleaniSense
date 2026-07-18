@@ -10,6 +10,7 @@ import { PollutionService } from '@/services/pollutionService';
 import { IncidentReport } from '@/types/pollution';
 import { AdminMapCanvas } from '@/components/admin/AdminMapCanvas';
 import { AdminHotspotItem } from '@/components/admin/AdminIncidentsLeafletMap';
+import { matchesCategoryFilter, filterComplaintsByPollutionType } from '@/utils/hotspotFilters';
 import {
   Activity,
   AlertTriangle,
@@ -150,13 +151,14 @@ export default function AdminDashboard() {
 
       let filteredCount = count;
       if (selectedType !== 'all') {
-        const sel = selectedType.toLowerCase();
-        const matchingComplaints = (h.complaints || []).filter((c: any) => {
-          const cat = (c.category_name || '').toLowerCase();
-          if (sel === 'land') return cat.includes('land') || cat.includes('waste') || cat.includes('garbage');
-          return cat.includes(sel);
-        });
-        filteredCount = matchingComplaints.length;
+        // Use shared filter utility for comprehensive keyword matching
+        const matchingComplaints = filterComplaintsByPollutionType(
+          (h.complaints || []) as Array<{category_name?: string}>,
+          selectedType
+        );
+        // Also consider dominant type — hotspot counts if dom type matches even with no complaint details
+        const domMatches = matchesCategoryFilter(h.dominantType, selectedType);
+        filteredCount = matchingComplaints.length > 0 ? matchingComplaints.length : (domMatches ? count : 0);
       }
 
       if (!cityMap[cityRaw]) {
@@ -185,16 +187,51 @@ export default function AdminDashboard() {
 
     if (selectedType !== 'all') {
       result = result.filter(c => {
-        const dom = c.dominantType.toLowerCase();
-        const sel = selectedType.toLowerCase();
-        if (sel === 'land') return dom.includes('land') || dom.includes('waste') || dom.includes('garbage') || c.filteredIncidentCount > 0;
-        return dom.includes(sel) || c.filteredIncidentCount > 0;
+        // Keep city if it has filtered incidents (matching complaints or matching dominant type)
+        return c.filteredIncidentCount > 0;
       });
     }
 
     if (searchCity.trim()) {
       const term = searchCity.toLowerCase();
-      result = result.filter(c => c.cityName.toLowerCase().includes(term));
+      result = result.filter(c => {
+        // 1. City Name or Dominant Type match
+        if (
+          (c.cityName && c.cityName.toLowerCase().includes(term)) ||
+          (c.dominantType && c.dominantType.toLowerCase().includes(term))
+        ) {
+          return true;
+        }
+        // 2. Check inner hotspots & complaints
+        return (c.hotspots || []).some(h => {
+          if (
+            (h.city && h.city.toLowerCase().includes(term)) ||
+            (h.district && h.district.toLowerCase().includes(term)) ||
+            (h.dominantType && h.dominantType.toLowerCase().includes(term)) ||
+            (h.id && h.id.toLowerCase().includes(term))
+          ) {
+            return true;
+          }
+          return (h.complaints || []).some((comp: any) => {
+            return (
+              (comp.id && String(comp.id).toLowerCase().includes(term)) ||
+              (comp.title && String(comp.title).toLowerCase().includes(term)) ||
+              (comp.description && String(comp.description).toLowerCase().includes(term)) ||
+              (comp.location_name && String(comp.location_name).toLowerCase().includes(term)) ||
+              (comp.category_name && String(comp.category_name).toLowerCase().includes(term)) ||
+              (comp.category && String(comp.category).toLowerCase().includes(term)) ||
+              (comp.status && String(comp.status).toLowerCase().includes(term)) ||
+              (comp.severity && String(comp.severity).toLowerCase().includes(term)) ||
+              (comp.assigned_officer && String(comp.assigned_officer).toLowerCase().includes(term)) ||
+              (comp.officer_name && String(comp.officer_name).toLowerCase().includes(term)) ||
+              (comp.resolution_summary && String(comp.resolution_summary).toLowerCase().includes(term)) ||
+              (comp.resolutionActions && String(comp.resolutionActions).toLowerCase().includes(term)) ||
+              (comp.actions && String(comp.actions).toLowerCase().includes(term)) ||
+              (comp.work_details && String(comp.work_details).toLowerCase().includes(term))
+            );
+          });
+        });
+      });
     }
 
     // Default Sort: City with highest hotspot count at top
@@ -222,17 +259,44 @@ export default function AdminDashboard() {
 
   // Filtered hotspots for display on Leaflet Map
   const displayHotspots = useMemo(() => {
+    let filtered = hotspotsList;
     if (selectedCity) {
-      return hotspotsList.filter(h => h.city === selectedCity);
+      filtered = filtered.filter(h => h.city === selectedCity);
     }
-    if (selectedType === 'all') return hotspotsList;
-    return hotspotsList.filter(h => {
-      const dom = (h.dominantType || '').toLowerCase();
-      const sel = selectedType.toLowerCase();
-      if (sel === 'land') return dom.includes('land') || dom.includes('waste') || dom.includes('garbage');
-      return dom.includes(sel);
-    });
-  }, [hotspotsList, selectedCity, selectedType]);
+    if (selectedType !== 'all') {
+      filtered = filtered.filter(h => {
+        const domMatches = matchesCategoryFilter(h.dominantType, selectedType);
+        const anyComplaintMatches = filterComplaintsByPollutionType(
+          (h.complaints || []) as Array<{category_name?: string}>,
+          selectedType
+        ).length > 0;
+        return domMatches || anyComplaintMatches;
+      });
+    }
+    if (searchCity.trim()) {
+      const term = searchCity.toLowerCase();
+      filtered = filtered.filter(h => {
+        if (
+          (h.city && h.city.toLowerCase().includes(term)) ||
+          (h.district && h.district.toLowerCase().includes(term)) ||
+          (h.dominantType && h.dominantType.toLowerCase().includes(term)) ||
+          (h.id && h.id.toLowerCase().includes(term))
+        ) return true;
+        return (h.complaints || []).some((comp: any) =>
+          (comp.id && String(comp.id).toLowerCase().includes(term)) ||
+          (comp.title && String(comp.title).toLowerCase().includes(term)) ||
+          (comp.description && String(comp.description).toLowerCase().includes(term)) ||
+          (comp.location_name && String(comp.location_name).toLowerCase().includes(term)) ||
+          (comp.category_name && String(comp.category_name).toLowerCase().includes(term)) ||
+          (comp.status && String(comp.status).toLowerCase().includes(term)) ||
+          (comp.assigned_officer && String(comp.assigned_officer).toLowerCase().includes(term)) ||
+          (comp.resolution_summary && String(comp.resolution_summary).toLowerCase().includes(term)) ||
+          (comp.work_details && String(comp.work_details).toLowerCase().includes(term))
+        );
+      });
+    }
+    return filtered;
+  }, [hotspotsList, selectedCity, selectedType, searchCity]);
 
   const handleSelectIncident = async (incident: IncidentReport) => {
     setSelectedIncident(incident);
@@ -254,10 +318,46 @@ export default function AdminDashboard() {
     }
   };
 
-  // Recent 5 reported incidents for Recent Logs
+  // Recent reported incidents — filtered dynamically when search query is active
   const recentLogs = useMemo(() => {
-    return incidents.slice(0, 5);
-  }, [incidents]);
+    if (!searchCity.trim()) {
+      return incidents.slice(0, 5);
+    }
+    const term = searchCity.toLowerCase();
+    return incidents.filter((inc: any) => {
+      return (
+        (inc.id && String(inc.id).toLowerCase().includes(term)) ||
+        (inc.name && String(inc.name).toLowerCase().includes(term)) ||
+        (inc.title && String(inc.title).toLowerCase().includes(term)) ||
+        (inc.description && String(inc.description).toLowerCase().includes(term)) ||
+        (inc.city && String(inc.city).toLowerCase().includes(term)) ||
+        (inc.location && String(inc.location).toLowerCase().includes(term)) ||
+        (inc.location_name && String(inc.location_name).toLowerCase().includes(term)) ||
+        (inc.category && String(inc.category).toLowerCase().includes(term)) ||
+        (inc.categoryName && String(inc.categoryName).toLowerCase().includes(term)) ||
+        (inc.status && String(inc.status).toLowerCase().includes(term)) ||
+        (inc.severity && String(inc.severity).toLowerCase().includes(term)) ||
+        (inc.officer_name && String(inc.officer_name).toLowerCase().includes(term)) ||
+        (inc.assigned_officer && String(inc.assigned_officer).toLowerCase().includes(term)) ||
+        (inc.resolution_summary && String(inc.resolution_summary).toLowerCase().includes(term)) ||
+        (inc.work_details && String(inc.work_details).toLowerCase().includes(term))
+      );
+    });
+  }, [incidents, searchCity]);
+
+  // Single report markers on map filtered by search query
+  const filteredSingles = useMemo(() => {
+    if (!searchCity.trim()) return singlesList;
+    const term = searchCity.toLowerCase();
+    return singlesList.filter((s: any) =>
+      (s.id && String(s.id).toLowerCase().includes(term)) ||
+      (s.title && String(s.title).toLowerCase().includes(term)) ||
+      (s.description && String(s.description).toLowerCase().includes(term)) ||
+      (s.location_name && String(s.location_name).toLowerCase().includes(term)) ||
+      (s.category_name && String(s.category_name).toLowerCase().includes(term)) ||
+      (s.status && String(s.status).toLowerCase().includes(term))
+    );
+  }, [singlesList, searchCity]);
 
   return (
     <div className="space-y-6 fade-in text-zinc-900 dark:text-zinc-100 font-sans">
@@ -368,12 +468,12 @@ export default function AdminDashboard() {
                   </h3>
                 </div>
 
-                {/* City Search Bar */}
+                {/* Universal Search Bar */}
                 <div className="relative">
                   <Search className="h-3.5 w-3.5 text-zinc-400 absolute left-3 top-2.5" />
                   <input
                     type="text"
-                    placeholder="Search city..."
+                    placeholder="Search city, district, report, category, officer, resolution..."
                     value={searchCity}
                     onChange={(e) => setSearchCity(e.target.value)}
                     className="w-full text-xs border border-zinc-200 dark:border-zinc-800 rounded-lg pl-8 pr-3 py-2 bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-white focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
@@ -601,7 +701,7 @@ export default function AdminDashboard() {
           <div className="flex-1 relative">
             <AdminMapCanvas
               hotspots={displayHotspots}
-              singles={singlesList}
+              singles={filteredSingles}
               selectedCity={selectedCity}
               selectedHotspotId={selectedHotspot?.id}
               pollutionFilter={selectedType}
@@ -656,16 +756,20 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Recent Logs Section: Displays Recent Last 5 Reported Incidents */}
+      {/* Recent Logs / Search Results Section */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs overflow-hidden flex flex-col text-left">
         <div className="p-5 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
           <div>
             <h3 className="font-extrabold text-zinc-950 dark:text-white text-lg flex items-center gap-2">
               <Clock className="h-5 w-5 text-zinc-800 dark:text-zinc-200" />
-              Recent Logs (Last 5 Reported Incidents)
+              {searchCity.trim()
+                ? `Search Results (${recentLogs.length} matching incident${recentLogs.length !== 1 ? 's' : ''})`
+                : 'Recent Logs (Last 5 Reported Incidents)'}
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Latest citizen incident submissions requiring municipal review
+              {searchCity.trim()
+                ? `Real-time search results matching "${searchCity.trim()}" across all report aspects`
+                : 'Latest citizen incident submissions requiring municipal review'}
             </p>
           </div>
 

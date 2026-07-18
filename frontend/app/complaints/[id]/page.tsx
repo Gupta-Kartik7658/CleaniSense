@@ -26,12 +26,69 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
     };
   }, [id, user, authLoading, fetchDetail]);
 
-  const mapStatus = (status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" => {
+  // Real-time status updates polling from backend
+  useEffect(() => {
+    if (!id || !complaintDetail) return;
+
+    const lowerStatus = complaintDetail.status.toLowerCase();
+    // Stop polling if status is terminal
+    if (lowerStatus === "resolved" || lowerStatus === "rejected" || lowerStatus === "dismissed") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      fetchDetail(id, undefined, true);
+    }, 5000); // Silent fetch details every 5 seconds
+
+    return () => clearInterval(interval);
+  }, [id, complaintDetail, fetchDetail]);
+
+  const mapStatus = (status: string): "Submitted" | "Under Review" | "AI Verification Complete" | "Approved" | "Resolved" | "Rejected" => {
     const lower = status.toLowerCase();
     if (lower === "resolved") return "Resolved";
-    if (lower === "rejected") return "Rejected";
-    if (lower === "municipality_accepted" || lower === "officer_assigned" || lower === "in_progress" || lower === "inspection_completed") return "Approved";
+    if (lower === "rejected" || lower === "dismissed") return "Rejected";
+    if (lower === "ai_validation_completed") return "AI Verification Complete";
+    if (lower === "submitted" || lower === "draft") return "Submitted";
+    if (lower === "ai_verification_in_progress") return "Under Review";
+    if (
+      lower === "municipality_accepted" ||
+      lower === "officer_assigned" ||
+      lower === "in_progress" ||
+      lower === "inspection_completed"
+    )
+      return "Approved";
     return "Under Review";
+  };
+
+  const getStepStatus = (stepId: string, currentStatus: string) => {
+    const status = currentStatus.toLowerCase();
+    
+    if (status === "rejected" || status === "dismissed") {
+      return stepId === "resolved" ? "pending" : "rejected";
+    }
+
+    const stepMapping: Record<string, string[]> = {
+      submitted: ["submitted", "ai_verification_in_progress", "ai_validation_completed", "municipality_accepted", "officer_assigned", "in_progress", "inspection_completed", "resolved"],
+      under_review: ["ai_verification_in_progress", "ai_validation_completed", "municipality_accepted", "officer_assigned", "in_progress", "inspection_completed", "resolved"],
+      ai_verified: ["ai_validation_completed", "municipality_accepted", "officer_assigned", "in_progress", "inspection_completed", "resolved"],
+      approved: ["municipality_accepted", "officer_assigned", "in_progress", "inspection_completed", "resolved"],
+      resolved: ["resolved"]
+    };
+
+    if (
+      status === stepId ||
+      (stepId === "under_review" && status === "ai_verification_in_progress") ||
+      (stepId === "ai_verified" && status === "ai_validation_completed") ||
+      (stepId === "approved" && ["municipality_accepted", "officer_assigned", "in_progress", "inspection_completed"].includes(status))
+    ) {
+      return "active";
+    }
+
+    const allowedForStep = stepMapping[stepId] || [];
+    if (allowedForStep.includes(status)) {
+      return "completed";
+    }
+    return "pending";
   };
 
   const statusMapped = complaintDetail ? mapStatus(complaintDetail.status) : "Under Review";
@@ -137,6 +194,60 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                     {complaintDetail.latitude.toFixed(4)}° N, {complaintDetail.longitude.toFixed(4)}° E
                   </span>
                 </div>
+              </div>
+            </div>
+
+            {/* Visual Lifecycle Timeline */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-100 dark:border-slate-700 pb-3">
+                Complaint Status Lifecycle
+              </h3>
+              
+              <div className="grid grid-cols-5 gap-2 relative">
+                {[
+                  { id: "submitted", label: "Submitted" },
+                  { id: "under_review", label: "Under Review" },
+                  { id: "ai_verified", label: "AI Verified" },
+                  { id: "approved", label: "Approved" },
+                  { id: "resolved", label: "Resolved" }
+                ].map((step, idx) => {
+                  const stepStatus = getStepStatus(step.id, complaintDetail.status);
+                  
+                  let colorClass = "bg-slate-100 border-slate-200 text-slate-400 dark:bg-slate-900 dark:border-slate-800";
+                  let lineClass = "bg-slate-150 dark:bg-slate-800";
+                  
+                  if (stepStatus === "completed") {
+                    colorClass = "bg-emerald-50 border-emerald-250 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-400";
+                    lineClass = "bg-emerald-500";
+                  } else if (stepStatus === "active") {
+                    colorClass = "bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-950/20 dark:border-blue-900 dark:text-blue-400 font-extrabold";
+                    lineClass = "bg-blue-450";
+                  } else if (stepStatus === "rejected") {
+                    colorClass = "bg-rose-50 border-rose-250 text-rose-700 dark:bg-rose-955/20 dark:border-rose-900 dark:text-rose-400";
+                    lineClass = "bg-rose-400";
+                  }
+
+                  return (
+                    <div key={step.id} className="flex flex-col items-center text-center relative z-10">
+                      {/* Connection Line */}
+                      {idx < 4 && (
+                        <div className="absolute top-4.5 left-1/2 w-full h-0.5 -z-10" style={{ left: "50%", right: "-50%" }}>
+                          <div className={`h-full ${lineClass} transition-colors duration-300`} />
+                        </div>
+                      )}
+                      
+                      {/* Step Indicator Dot/Icon */}
+                      <div className={`w-9 h-9 rounded-full border flex items-center justify-center text-xs font-bold ${colorClass} transition-all duration-300 shadow-xs`}>
+                        {stepStatus === "completed" ? "✓" : idx + 1}
+                      </div>
+                      
+                      {/* Step Label */}
+                      <span className={`text-[10px] mt-2 block uppercase tracking-wider font-bold ${stepStatus === "active" ? "text-blue-600 dark:text-blue-400" : "text-slate-500 dark:text-slate-455"}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -249,7 +360,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 </div>
 
                 {/* Evidence Images */}
-                {(resolutionDetail.before_image_url || resolutionDetail.after_image_url) && (
+                {(resolutionDetail.before_image_url || resolutionDetail.after_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
                   <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
                     <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-100 dark:border-slate-700 pb-3">
                       Resolution Evidence (Before vs After)
@@ -258,14 +369,14 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       
                       {/* Before Image */}
-                      {resolutionDetail.before_image_url && (
+                      {(resolutionDetail.before_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
                         <div className="space-y-2 text-center">
                           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
                             Before (Citizen Submission)
                           </span>
                           <div className="h-56 relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100">
                             <img
-                              src={resolutionDetail.before_image_url}
+                              src={resolutionDetail.before_image_url || complaintDetail.attachments[0].public_url}
                               alt="Before Cleanup"
                               className="w-full h-full object-cover"
                             />
