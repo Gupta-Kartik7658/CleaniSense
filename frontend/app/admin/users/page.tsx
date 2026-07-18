@@ -125,10 +125,14 @@ export default function UsersPage() {
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       result = result.filter(u =>
-        u.name.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term) ||
+        (u.name && u.name.toLowerCase().includes(term)) ||
+        (u.email && u.email.toLowerCase().includes(term)) ||
         (u.city && u.city.toLowerCase().includes(term)) ||
-        (u.phone && u.phone.includes(term))
+        (u.phone && String(u.phone).toLowerCase().includes(term)) ||
+        (u.role && u.role.toLowerCase().includes(term)) ||
+        (u.status && u.status.toLowerCase().includes(term)) ||
+        ((u as any).department && String((u as any).department).toLowerCase().includes(term)) ||
+        (u.id && String(u.id).toLowerCase().includes(term))
       );
     }
 

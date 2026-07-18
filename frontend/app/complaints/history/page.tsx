@@ -39,15 +39,21 @@ export default function ComplaintsHistoryPage() {
   // Map all items once
   const allReports = useMemo(
     () =>
-      (complaintsData?.items ?? []).map((r) => ({
+      (complaintsData?.items ?? []).map((r: any) => ({
         id: r.id,
         title: r.title,
         status: mapStatus(r.status),
-        locationName: r.location_name,
+        rawStatus: r.status,
+        description: r.description || "",
+        shortDescription: r.short_description || "",
+        resolutionSummary: r.resolution?.summary || r.resolution_summary || "",
+        resolutionActions: r.resolution?.actions || r.resolution_actions || "",
+        assignedOfficer: r.assigned_officer || r.resolution?.officer_name || r.officer_name || "",
+        locationName: r.location_name || "",
         latitude: r.latitude,
         longitude: r.longitude,
         date: r.created_at,
-        category: (r as any).category ? (r as any).category.name : "Other",
+        category: r.category ? r.category.name : "Other",
         severity: r.severity
           ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1)
           : "Medium",
@@ -60,12 +66,19 @@ export default function ComplaintsHistoryPage() {
   const filteredReports = useMemo(() => {
     return allReports.filter((r) => {
       const matchesFilter = filter === "All" || r.status === filter;
-      const term = search.toLowerCase();
+      const term = search.trim().toLowerCase();
       const matchesSearch =
         !term ||
-        r.title.toLowerCase().includes(term) ||
-        r.id.toLowerCase().includes(term) ||
-        r.locationName.toLowerCase().includes(term);
+        (r.title || "").toLowerCase().includes(term) ||
+        (r.id || "").toLowerCase().includes(term) ||
+        (r.locationName || "").toLowerCase().includes(term) ||
+        (r.description || "").toLowerCase().includes(term) ||
+        (r.shortDescription || "").toLowerCase().includes(term) ||
+        (r.resolutionSummary || "").toLowerCase().includes(term) ||
+        (r.resolutionActions || "").toLowerCase().includes(term) ||
+        (r.assignedOfficer || "").toLowerCase().includes(term) ||
+        (r.category || "").toLowerCase().includes(term) ||
+        (r.severity || "").toLowerCase().includes(term);
       return matchesFilter && matchesSearch;
     });
   }, [allReports, filter, search]);
@@ -132,8 +145,8 @@ export default function ComplaintsHistoryPage() {
           </div>
         </div>
 
-        {/* Complaints Listing */}
-        {loading ? (
+        {/* Complaints Listing — show spinner if loading OR data not yet fetched (e.g. initial abort) */}
+        {(loading || complaintsData === null) ? (
           <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20 flex flex-col items-center justify-center">
             <svg className="animate-spin h-8 w-8 text-emerald-600 mb-2" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

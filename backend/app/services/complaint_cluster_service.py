@@ -1,12 +1,14 @@
 import uuid
 from typing import List, Dict, Any
 # pyrefly: ignore [missing-import]
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.complaint import Complaint
+from app.constants.enums import ComplaintStatus
 from app.utils.geo import haversine_m
+from app.core.config import settings
 
-HOTSPOT_RADIUS_METERS = 50.0
+HOTSPOT_RADIUS_METERS = 1000.0
 
 
 class _UnionFind:
@@ -27,14 +29,20 @@ class _UnionFind:
 
 def _complaint_point(complaint: Complaint) -> Dict[str, Any]:
     category_name = complaint.category.name if complaint.category else None
+    res = complaint.resolution
     return {
-        "id": complaint.id,
+        "id": str(complaint.id),
         "title": complaint.title,
+        "description": complaint.description or "",
         "status": complaint.status,
+        "severity": complaint.severity or "medium",
         "latitude": complaint.latitude,
         "longitude": complaint.longitude,
-        "location_name": complaint.location_name,
-        "category_name": category_name,
+        "location_name": complaint.location_name or "",
+        "category_name": category_name or "General",
+        "assigned_officer": complaint.assigned_officer or (res.officer_name if res else ""),
+        "resolution_summary": res.summary if res else "",
+        "work_details": res.actions if res else "",
     }
 
 
@@ -119,11 +127,9 @@ class ComplaintClusterService:
         user_id: uuid.UUID,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
-        # pyrefly: ignore [missing-import]
-        from sqlalchemy.orm import joinedload
-        complaints = (
+        all_user_complaints = (
             db.query(Complaint)
-            .options(joinedload(Complaint.category))
+            .options(joinedload(Complaint.category), joinedload(Complaint.resolution))
             .filter(
                 Complaint.user_id == user_id,
                 Complaint.is_deleted == False,
@@ -133,8 +139,17 @@ class ComplaintClusterService:
             .order_by(Complaint.created_at.desc())
             .all()
         )
-        user_points = [_complaint_point(c) for c in complaints]
-        result = cluster_complaints(complaints, radius_meters=radius_meters)
+        user_points = [_complaint_point(c) for c in all_user_complaints]
+
+        active_complaints = [
+            c for c in all_user_complaints
+            if c.status not in [
+                ComplaintStatus.RESOLVED.value,
+                ComplaintStatus.REJECTED.value,
+                ComplaintStatus.ARCHIVED.value,
+            ]
+        ]
+        result = cluster_complaints(active_complaints, radius_meters=radius_meters)
         result["user_complaints"] = user_points
         result["hotspot_radius_meters"] = radius_meters
         return result
@@ -145,16 +160,19 @@ class ComplaintClusterService:
         municipality_id: uuid.UUID,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
-        # pyrefly: ignore [missing-import]
-        from sqlalchemy.orm import joinedload
         complaints = (
             db.query(Complaint)
-            .options(joinedload(Complaint.category))
+            .options(joinedload(Complaint.category), joinedload(Complaint.resolution))
             .filter(
                 Complaint.municipality_id == municipality_id,
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
+                Complaint.status.notin_([
+                    ComplaintStatus.RESOLVED.value,
+                    ComplaintStatus.REJECTED.value,
+                    ComplaintStatus.ARCHIVED.value,
+                ])
             )
             .order_by(Complaint.created_at.desc())
             .all()
@@ -168,15 +186,18 @@ class ComplaintClusterService:
         db: Session,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
-        # pyrefly: ignore [missing-import]
-        from sqlalchemy.orm import joinedload
         complaints = (
             db.query(Complaint)
-            .options(joinedload(Complaint.category))
+            .options(joinedload(Complaint.category), joinedload(Complaint.resolution))
             .filter(
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
+                Complaint.status.notin_([
+                    ComplaintStatus.RESOLVED.value,
+                    ComplaintStatus.REJECTED.value,
+                    ComplaintStatus.ARCHIVED.value,
+                ])
             )
             .order_by(Complaint.created_at.desc())
             .all()

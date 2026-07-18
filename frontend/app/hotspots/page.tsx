@@ -6,6 +6,7 @@ import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import api from "@/lib/api";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/common/Skeleton";
+import { filterHotspotsForDisplay, filterSinglesByPollutionType, matchesCategoryFilter } from "@/utils/hotspotFilters";
 
 const ComplaintLeafletMap = dynamic(
   () => import("@/components/dashboard/ComplaintLeafletMap").then((mod) => mod.ComplaintLeafletMap),
@@ -31,7 +32,7 @@ export default function HotspotsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res: any = await api.get('/admin/hotspots');
+      const res: any = await api.get('/hotspots/map');
       const data = res?.data || res || {};
       const hList = (data.hotspots || []).map((h: any) => ({
         id: String(h.id),
@@ -57,47 +58,45 @@ export default function HotspotsPage() {
     }
   };
 
-  // Filter hotspots dynamically based on selected category pill
+  // Filter hotspots dynamically using shared comprehensive filter logic
   const filteredHotspotsList = useMemo(() => {
     if (selectedCategory === "all") return hotspots;
-    const sel = selectedCategory.toLowerCase();
-    return hotspots.filter((h) => {
-      const dom = (h.dominant_category || "").toLowerCase();
-      const catsPresent = (h.categories_present || []).map((c: string) => c.toLowerCase());
-      if (sel === "land") {
-        return dom.includes("land") || dom.includes("waste") || dom.includes("garbage") ||
-          catsPresent.some((c: string) => c.includes("land") || c.includes("waste") || c.includes("garbage"));
-      }
-      return dom.includes(sel) || catsPresent.some((c: string) => c.includes(sel));
-    });
+    return filterHotspotsForDisplay(hotspots, selectedCategory);
   }, [hotspots, selectedCategory]);
 
   const mapData = useMemo(() => {
+    // When a filter is active, filter singles by category too
+    const filteredSingles = selectedCategory === "all"
+      ? singles
+      : filterSinglesByPollutionType(singles, selectedCategory);
+
     return {
-      singles: singles.map((s) => ({
+      singles: filteredSingles.map((s: any) => ({
         id: s.id,
         latitude: Number(s.latitude),
         longitude: Number(s.longitude),
         title: s.title || 'Incident Report',
         status: s.status || 'submitted',
-        location_name: s.location_name || 'Coordinates Verified'
+        location_name: s.location_name || 'Coordinates Verified',
+        category_name: s.category_name || null,
       })),
-      hotspots: filteredHotspotsList.map((h) => ({
+      hotspots: filteredHotspotsList.map((h: any) => ({
         id: h.id,
         latitude: h.latitude,
         longitude: h.longitude,
-        count: h.count || 2,
-        radius_meters: h.radius_meters || 50.0,
-        complaint_ids: h.complaints.map((c: any) => c.id),
+        // Use filteredCount if available (from filterHotspotsForDisplay), else use total count
+        count: (h as any).filteredCount ?? h.count ?? 2,
+        radius_meters: h.radius_meters || 1000.0,
+        complaint_ids: (h.complaints || []).map((c: any) => c.id),
         complaints: h.complaints || [],
         dominant_category: h.dominant_category,
         categories_present: h.categories_present || [],
         category_counts: h.category_counts || {}
       })),
-      total_complaints: hotspots.reduce((acc, curr) => acc + (curr.count || 1), 0),
-      hotspot_radius_meters: 50.0
+      total_complaints: filteredHotspotsList.length + filteredSingles.length,
+      hotspot_radius_meters: 1000.0
     };
-  }, [hotspots, filteredHotspotsList, singles]);
+  }, [hotspots, filteredHotspotsList, singles, selectedCategory]);
 
   const getSeverityStyle = (sev?: string) => {
     const s = (sev || "medium").toLowerCase();

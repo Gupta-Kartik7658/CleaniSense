@@ -136,9 +136,8 @@ export default function ComplaintsPage() {
     const selectedCategory = categories.find((c) => c.id === categoryId);
     const categoryName = selectedCategory ? selectedCategory.name : "Environmental Pollution";
 
-    // Autofill optional inputs before backend schema validations
-    const finalTitle = title.trim() || `${categoryName} Report`;
-    const finalDescription = description.trim() || `Reported environmental issue regarding ${categoryName} with ${severityHint} severity at coordinates (${lat}, ${lng}). Please refer to uploaded image evidence for AI validation.`;
+    const finalTitle = title.trim();
+    const finalDescription = description.trim();
     const finalLocationName = locationName.trim() || `GPS Coordinates Location (${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)})`;
 
     const parsedLat = parseFloat(lat);
@@ -153,7 +152,7 @@ export default function ComplaintsPage() {
     }
 
     if (finalTitle.length < 5) {
-      setFileErrors("Title must be at least 5 characters long.");
+      setFileErrors("Short Description must be at least 5 characters long.");
       return;
     }
 
@@ -288,6 +287,39 @@ export default function ComplaintsPage() {
               </div>
             </div>
 
+            {/* Short Description & Description (Mandatory upfront) */}
+            <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Short Description <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Open trash burning in playground"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  required
+                  minLength={5}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Description <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  placeholder="Describe the environmental issue, sources, and surrounding situation..."
+                  rows={4}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  required
+                  minLength={20}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 resize-none"
+                />
+              </div>
+            </div>
+
             {/* Geolocation Section */}
             <div className="space-y-2 border-t border-slate-100 dark:border-slate-700 pt-4">
               <div className="flex justify-between items-center">
@@ -411,34 +443,6 @@ export default function ComplaintsPage() {
               {advancedOpen && (
                 <div className="mt-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/20 border border-slate-100 dark:border-slate-800/80 p-4 rounded-xl animate-fadeIn">
                   
-                  {/* Title */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      Custom Title <span className="text-slate-400 font-normal">(Optional, min 5 chars)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Open trash burning in playground"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600"
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                      Custom Description <span className="text-slate-405 font-normal">(Optional, min 20 chars)</span>
-                    </label>
-                    <textarea
-                      placeholder="Describe the issue, sources, and surrounding situation..."
-                      rows={3}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 resize-none"
-                    />
-                  </div>
-
                   {/* Location Landmark Address */}
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">

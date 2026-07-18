@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.schemas.complaint import ComplaintResponse
 from app.schemas.hotspot import HotspotResponse
 from app.schemas.profile import UserPreferenceBase
@@ -21,14 +21,14 @@ class ComplaintHotspotCluster(BaseModel):
     longitude: float
     count: int
     radius_meters: float
-    complaint_ids: List[uuid.UUID]
-    complaints: List[ComplaintMapPoint]
+    complaint_ids: List[uuid.UUID] = Field(default_factory=list)
+    complaints: List[ComplaintMapPoint] = Field(default_factory=list)
 
 class ComplaintMapData(BaseModel):
     singles: List[ComplaintMapPoint]
     hotspots: List[ComplaintHotspotCluster]
     total_complaints: int
-    hotspot_radius_meters: float = 50.0
+    hotspot_radius_meters: float = 1000.0
     user_complaints: Optional[List[ComplaintMapPoint]] = None
 
 class CategoryResponse(BaseModel):
@@ -67,6 +67,7 @@ class DashboardResponse(BaseModel):
     recent_reports: List[ComplaintResponse]
     nearby_hotspots: List[HotspotResponse]
     complaint_map: ComplaintMapData
+    hotspot_map: Optional[ComplaintMapData] = None
     unread_notifications: int
     preferences: UserPreferenceBase
 

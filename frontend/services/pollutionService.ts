@@ -12,16 +12,16 @@ export class PollutionService {
       console.error('Error fetching dashboard stats from API, using fallback data:', error);
       // Fallback data if backend is in setup
       return {
-        totalIncidents: 1247,
-        pendingIncidents: 89,
-        resolvedIncidents: 1058,
-        criticalIncidents: 23,
-        totalUsers: 3456,
-        activeUsers: 892,
-        averageAQI: 156,
-        hotspotCount: 12,
-        resolutionRate: 84.8,
-        averageResponseTime: 4.2
+        totalIncidents: 0,
+        pendingIncidents: 0,
+        resolvedIncidents: 0,
+        criticalIncidents: 0,
+        totalUsers: 0,
+        activeUsers: 0,
+        averageAQI: 0,
+        hotspotCount: 0,
+        resolutionRate: 0,
+        averageResponseTime: 0
       };
     }
   }
@@ -161,5 +161,23 @@ export class PollutionService {
 
   static async deleteIncident(incidentId: string): Promise<void> {
     await api.delete(`/admin/incidents/${incidentId}`);
+  }
+
+  static async resolveIncident(
+    incidentId: string,
+    summary: string,
+    actions: string,
+    photo: File
+  ): Promise<any> {
+    const formData = new FormData();
+    formData.append("summary", summary);
+    formData.append("actions", actions);
+    formData.append("photo", photo);
+    const response = await api.post(`/admin/incidents/${incidentId}/resolve`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response as any;
   }
 }

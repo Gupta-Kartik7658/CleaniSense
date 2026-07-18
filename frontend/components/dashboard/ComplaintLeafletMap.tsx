@@ -36,9 +36,13 @@ function statusColor(status: string) {
 
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
+  const hasFittedRef = React.useRef(false);
 
   useEffect(() => {
+    if (hasFittedRef.current) return;
     if (points.length === 0) return;
+
+    hasFittedRef.current = true;
     if (points.length === 1) {
       map.setView(points[0], 16);
       return;

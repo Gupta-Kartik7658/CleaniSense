@@ -78,6 +78,7 @@ export interface BackendDashboardResponse {
   recent_reports: BackendComplaintItem[];
   nearby_hotspots: BackendHotspotItem[];
   complaint_map: ComplaintMapData;
+  hotspot_map?: ComplaintMapData;
   unread_notifications: number;
   preferences: BackendUserPreference;
 }

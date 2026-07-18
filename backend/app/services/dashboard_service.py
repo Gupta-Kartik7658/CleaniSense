@@ -1,7 +1,11 @@
 import uuid
+import logging
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone, timedelta
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session, joinedload
+
+logger = logging.getLogger(__name__)
 
 from app.models.user import User
 from app.models.complaint import Complaint
@@ -42,25 +46,25 @@ class DashboardService:
             ]
             active_reports = sum(status_counts.get(status, 0) for status in active_statuses)
 
-            # 2. Get all complaints within the last 14 days for the dashboard
-
-            two_weeks_ago = datetime.utcnow() - timedelta(days=14)
+            # 2. Get user complaints for the dashboard
             week_complaints = db.query(Complaint).options(
-                joinedload(Complaint.user)
+                joinedload(Complaint.user),
+                joinedload(Complaint.category),
+                joinedload(Complaint.resolution)
             ).filter(
                 Complaint.user_id == user_id,
-                Complaint.is_deleted == False,
-                Complaint.created_at >= two_weeks_ago
-            ).order_by(Complaint.created_at.desc()).all()
+                Complaint.is_deleted == False
+            ).order_by(Complaint.created_at.desc()).limit(20).all()
 
             # Fallback for admins testing citizen view who might have no personal complaints
             if not week_complaints and current_user.role != UserRole.CITIZEN.value:
                 week_complaints = db.query(Complaint).options(
-                    joinedload(Complaint.user)
+                    joinedload(Complaint.user),
+                    joinedload(Complaint.category),
+                    joinedload(Complaint.resolution)
                 ).filter(
-                    Complaint.is_deleted == False,
-                    Complaint.created_at >= two_weeks_ago
-                ).order_by(Complaint.created_at.desc()).all()
+                    Complaint.is_deleted == False
+                ).order_by(Complaint.created_at.desc()).limit(20).all()
 
             recent_items = []
             for c in week_complaints:
@@ -108,8 +112,11 @@ class DashboardService:
             # 6. Preferences
             prefs = preference_service.get_or_create_preferences(db, user_id)
 
-            # 7. System-wide Map clustering for Citizen Dashboard
-            complaint_map = complaint_cluster_service.get_all_complaint_map(db)
+            # 7. Map data for Citizen Dashboard:
+            # - complaint_map uses USER's own complaints (for ComplaintMapSection which shows personal pins)
+            # - all_complaints_map is system-wide hotspot clusters (for HotspotSection map)
+            user_complaint_map = complaint_cluster_service.get_user_complaint_map(db, user_id)
+            all_complaint_map = complaint_cluster_service.get_all_complaint_map(db)
 
             return {
                 "overview": {
@@ -120,7 +127,10 @@ class DashboardService:
                 },
                 "recent_reports": recent_items,
                 "nearby_hotspots": nearby_hotspots_list,
-                "complaint_map": complaint_map,
+                # complaint_map = user-specific pins for personal map section
+                "complaint_map": user_complaint_map,
+                # hotspot_map = all system clusters for hotspot section (right column)
+                "hotspot_map": all_complaint_map,
                 "unread_notifications": unread_notifications,
                 "preferences": {
                     "language": prefs.language,

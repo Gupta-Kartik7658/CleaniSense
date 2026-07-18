@@ -3,7 +3,7 @@ import json
 from typing import Optional, List
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -96,12 +96,39 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
         elif att.public_url:
             media_urls.append(att.public_url)
 
+    # Resolution report object
+    res_data = None
+    if complaint.resolution:
+        after_url = complaint.resolution.after_image_url
+        if after_url and not after_url.startswith("http"):
+            after_url = storage_service.storage_client.get_public_url(after_url)
+        before_url = complaint.resolution.before_image_url
+        if before_url and not before_url.startswith("http"):
+            before_url = storage_service.storage_client.get_public_url(before_url)
+
+        res_data = {
+            "summary": complaint.resolution.summary,
+            "actions": complaint.resolution.actions,
+            "officer_name": complaint.resolution.officer_name or complaint.assigned_officer or "Municipal Admin",
+            "department": complaint.resolution.department,
+            "after_image_url": after_url,
+            "before_image_url": before_url,
+            "date_resolved": complaint.resolution.date_resolved.isoformat() if complaint.resolution.date_resolved else None,
+        }
+
+    officer_name = complaint.assigned_officer or (complaint.resolution.officer_name if complaint.resolution else None) or "Municipal Admin"
+
     return {
         "id": str(complaint.id),
         "userId": str(complaint.user_id),
         "userName": complaint.user.name or "Citizen",
         "userEmail": complaint.user.email,
         "type": flow_type,
+        "categoryName": complaint.category.name if complaint.category else "Environmental",
+        "assignedOfficer": officer_name,
+        "resolution": res_data,
+        "resolutionSummary": complaint.resolution.summary if complaint.resolution else None,
+        "resolutionActions": complaint.resolution.actions if complaint.resolution else None,
         "severity": frontend_severity,
         "severityScore": round(float(severity_score), 2),
         "severityPercentage": round(float(severity_score), 2),
@@ -375,6 +402,13 @@ def update_incident_status(
     db.commit()
     db.refresh(complaint)
 
+    # Refresh active database hotspots
+    try:
+        from app.services.hotspot_service import hotspot_service
+        hotspot_service.refresh_hotspots(db)
+    except Exception as ex:
+        pass
+
     # Log timeline history and send notification
     from app.services.complaint_service import complaint_service
     remarks = notes or f"Complaint updated to {new_status} by administrator"
@@ -410,6 +444,98 @@ def delete_admin_incident(
     return standard_response(
         success=True,
         message="Incident deleted and wiped from database successfully"
+    )
+
+@router.post("/incidents/{incident_id}/resolve", response_model=StandardResponseModel)
+async def resolve_incident_endpoint(
+    incident_id: uuid.UUID,
+    summary: Optional[str] = Form(None),
+    actions: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    photo: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: DBUser = Depends(require_admin)
+):
+    complaint = db.query(DBComplaint).filter(DBComplaint.id == incident_id, DBComplaint.is_deleted == False).first()
+    if not complaint:
+        raise HTTPException(status_code=456, detail="Incident not found")
+
+    photo_content = await photo.read()
+    if not photo_content:
+        raise HTTPException(status_code=400, detail="Resolution photo evidence is mandatory")
+
+    # Upload to Supabase
+    from app.services.storage_service import storage_service
+    storage_provider, storage_path, _ = storage_service.storage_client.upload_file(
+        file_content=photo_content,
+        filename=photo.filename,
+        folder=f"resolutions/{incident_id}"
+    )
+
+    # Create ResolutionReport record
+    from app.models.resolution_report import ResolutionReport
+    
+    # Delete existing resolution report if it exists
+    existing_res = db.query(ResolutionReport).filter(ResolutionReport.complaint_id == incident_id).first()
+    if existing_res:
+        db.delete(existing_res)
+        db.commit()
+
+    officer_name = current_user.name or current_user.email or "Municipal Admin"
+    res_summary = summary or description or "Environmental issue resolved successfully."
+    res_actions = actions or description or "Field inspection conducted and cleanup actions performed."
+
+    before_image_path = None
+    if complaint.attachments and len(complaint.attachments) > 0:
+        before_image_path = complaint.attachments[0].storage_path
+
+    resolution = ResolutionReport(
+        complaint_id=incident_id,
+        summary=res_summary,
+        department="Municipality Operations",
+        officer_name=officer_name,
+        actions=res_actions,
+        before_image_url=before_image_path,
+        after_image_url=storage_path,
+        date_resolved=datetime.now(timezone.utc)
+    )
+    db.add(resolution)
+
+    # Update complaint status & assigned officer
+    complaint.status = "resolved"
+    complaint.assigned_officer = officer_name
+    complaint.assigned_department = "Municipality Operations"
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+
+    # Refresh active database hotspots
+    try:
+        from app.services.hotspot_service import hotspot_service
+        hotspot_service.refresh_hotspots(db)
+    except Exception as ex:
+        pass
+
+    # Log timeline history and notify
+    from app.services.complaint_service import complaint_service
+    complaint_service._add_status_history_entry(
+        db,
+        complaint.id,
+        "resolved",
+        f"Complaint resolved by {officer_name}: {res_summary}",
+        current_user.id
+    )
+    complaint_service._dispatch_notification_hook(db, complaint, "RESOLVED")
+
+    # Dynamic signing for response object
+    if resolution.after_image_url and not resolution.after_image_url.startswith("http"):
+        resolution.after_image_url = storage_service.storage_client.get_public_url(resolution.after_image_url)
+
+    incident = map_db_complaint_to_frontend(complaint)
+    return standard_response(
+        success=True,
+        message="Incident resolved successfully",
+        data=incident
     )
 
 @router.post("/incidents/{incident_id}/assign", response_model=StandardResponseModel)

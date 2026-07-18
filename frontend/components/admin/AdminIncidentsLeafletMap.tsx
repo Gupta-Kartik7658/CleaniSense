@@ -12,6 +12,7 @@ import {
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
+import { filterComplaintsByPollutionType, filterHotspotsForDisplay, filterSinglesByPollutionType, matchesCategoryFilter } from "../../utils/hotspotFilters";
 
 export interface AdminHotspotItem {
   id: string;
@@ -55,15 +56,7 @@ function getCategoryColor(type: string = ""): string {
   return "#10b981"; // Emerald for Land/Waste/General
 }
 
-function filterComplaintsByType(complaints: any[], filterType: string): any[] {
-  if (!filterType || filterType === "all") return complaints;
-  const f = filterType.toLowerCase();
-  return complaints.filter((c) => {
-    const cat = (c.category_name || "").toLowerCase();
-    if (f === "land") return cat.includes("land") || cat.includes("waste") || cat.includes("garbage");
-    return cat.includes(f);
-  });
-}
+
 
 function FitMapBounds({
   hotspots,
@@ -75,17 +68,26 @@ function FitMapBounds({
   selectedHotspotId?: string | null;
 }) {
   const map = useMap();
+  const hasFittedInitialRef = React.useRef(false);
+  const prevHotspotIdRef = React.useRef<string | null | undefined>(selectedHotspotId);
 
   useEffect(() => {
-    if (!hotspots || hotspots.length === 0) return;
-
-    if (selectedHotspotId) {
+    // If the user explicitly clicked on a specific hotspot to inspect:
+    if (selectedHotspotId && selectedHotspotId !== prevHotspotIdRef.current) {
+      prevHotspotIdRef.current = selectedHotspotId;
       const target = hotspots.find((h) => h.id === selectedHotspotId);
       if (target && target.latitude && target.longitude) {
         map.setView([target.latitude, target.longitude], 15, { animate: true });
         return;
       }
     }
+    prevHotspotIdRef.current = selectedHotspotId;
+
+    // Only do initial auto-bounding ONCE on load so filter changes don't move the map!
+    if (hasFittedInitialRef.current) return;
+    if (!hotspots || hotspots.length === 0) return;
+
+    hasFittedInitialRef.current = true;
 
     if (selectedCity) {
       const cityHotspots = hotspots.filter((h) => h.city === selectedCity);
@@ -157,13 +159,13 @@ export function AdminIncidentsLeafletMap({
           selectedHotspotId={selectedHotspotId}
         />
 
-        {/* Render 50m Hotspot Shaded Regions and Number Badges */}
+        {/* Render Hotspot Shaded Regions and Number Badges */}
         {hotspots.map((h) => {
-          const filteredList = filterComplaintsByType(h.complaints || [], pollutionFilter);
+          const filteredList = filterComplaintsByPollutionType(h.complaints || [], pollutionFilter);
+          const domMatches = matchesCategoryFilter(h.dominantType, pollutionFilter);
+          // Show hotspot if dominant type OR any complaints match the filter
           const displayCount = pollutionFilter === "all" ? h.count : filteredList.length;
-
-          // Hide hotspot marker if current pollution filter results in 0 matching reports
-          if (pollutionFilter !== "all" && displayCount === 0) {
+          if (pollutionFilter !== "all" && displayCount === 0 && !domMatches) {
             return null;
           }
 
@@ -242,9 +244,9 @@ export function AdminIncidentsLeafletMap({
           );
         })}
 
-        {/* Render Single Reported Incidents ONLY in Standard Map mode (vector) */}
+        {/* Render Single Reported Incidents — filtered by pollution type in non-all modes */}
         {mapMode === "vector" &&
-          singles.map((s) => (
+          filterSinglesByPollutionType(singles, pollutionFilter).map((s) => (
             <CircleMarker
               key={s.id}
               center={[s.latitude, s.longitude]}
