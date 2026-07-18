@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useAuth } from "@/providers/AuthProvider";
 import { useDashboard } from "@/hooks/useDashboard";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { ReportHero } from "@/components/dashboard/ReportHero";
@@ -10,7 +11,16 @@ import { ReportsSection } from "@/components/dashboard/reports/ReportsSection";
 import { HotspotSection } from "@/components/dashboard/hotspots/HotspotSection";
 
 export default function DashboardPage() {
-  const { data, loading, error } = useDashboard();
+  // Pass user?.id so useDashboard waits for auth before fetching.
+  // This fixes the production race condition where Firebase Auth initializes
+  // AFTER the component mounts, causing an unauthenticated API request that
+  // returns empty/401 data which then gets stuck as the "loaded" state.
+  const { user, loading: authLoading } = useAuth();
+  const { data, loading, error } = useDashboard(user?.id ?? null);
+
+  // While auth is still resolving, show the loading spinner from PortalLayout.
+  // Once auth resolves (user is set), useDashboard will fire its authenticated request.
+  const isLoading = authLoading || loading;
 
   return (
     <div className="space-y-8">
@@ -27,12 +37,12 @@ export default function DashboardPage() {
           {error}
         </div>
       ) : (
-        <OverviewSection summary={data?.summary} loading={loading} />
+        <OverviewSection summary={data?.summary} loading={isLoading} />
       )}
 
       {/* Complaint geo graph with 50m hotspot clustering */}
       {!error && (
-        <ComplaintMapSection mapData={data?.complaintMap} loading={loading} />
+        <ComplaintMapSection mapData={data?.complaintMap} loading={isLoading} />
       )}
 
       {/* Split Two-Column Layout (Desktop) */}
@@ -41,12 +51,12 @@ export default function DashboardPage() {
           
           {/* Left Column - 60% Width (col-span-7) */}
           <div className="lg:col-span-7">
-            <ReportsSection reports={data?.reports} loading={loading} />
+            <ReportsSection reports={data?.reports} loading={isLoading} />
           </div>
 
           {/* Right Column - 40% Width (col-span-5) */}
           <div className="lg:col-span-5">
-            <HotspotSection hotspots={data?.hotspots} mapData={data?.hotspotMap} loading={loading} />
+            <HotspotSection hotspots={data?.hotspots} mapData={data?.hotspotMap} loading={isLoading} />
           </div>
 
         </div>

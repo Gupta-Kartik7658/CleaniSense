@@ -5,32 +5,42 @@ import { dashboardService } from "../services/dashboard";
 // ---------------------------------------------------------------------------
 // Module-level cache: persists across component unmount/remount (navigation).
 // Cleared automatically after CACHE_TTL_MS milliseconds.
+// Only stores SUCCESSFULLY fetched data — never caches empty/failed responses.
 // ---------------------------------------------------------------------------
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 let _cachedData: DashboardData | null = null;
 let _cacheTimestamp: number | null = null;
+let _cachedUserId: string | null = null;
 
-function isCacheValid(): boolean {
+function isCacheValid(userId?: string | null): boolean {
   return (
     _cachedData !== null &&
     _cacheTimestamp !== null &&
-    Date.now() - _cacheTimestamp < CACHE_TTL_MS
+    Date.now() - _cacheTimestamp < CACHE_TTL_MS &&
+    // Invalidate cache if user changed
+    (_cachedUserId === null || _cachedUserId === userId)
   );
 }
 
-function readCache(): DashboardData | null {
-  return isCacheValid() ? _cachedData : null;
+function readCache(userId?: string | null): DashboardData | null {
+  return isCacheValid(userId) ? _cachedData : null;
 }
 
-function writeCache(data: DashboardData) {
-  _cachedData = data;
-  _cacheTimestamp = Date.now();
+function writeCache(data: DashboardData, userId?: string | null) {
+  // Only cache if summary labels exist — never cache empty/failed state
+  const hasContent = data.summary && data.summary.length > 0 && data.summary.some(s => s.label);
+  if (hasContent) {
+    _cachedData = data;
+    _cacheTimestamp = Date.now();
+    _cachedUserId = userId ?? null;
+  }
 }
 
 export function invalidateDashboardCache() {
   _cachedData = null;
   _cacheTimestamp = null;
+  _cachedUserId = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -54,28 +64,55 @@ function mapStatus(status: string): "Under Review" | "Resolved" | "Rejected" | "
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
-export function useDashboard() {
-  // Initialise with cached data if available — no flash/skeleton on navigation back
-  const [data, setData] = useState<DashboardData | null>(() => readCache());
-  const [loading, setLoading] = useState(!isCacheValid());
+// IMPORTANT: `userId` must be passed from the page component (from useAuth).
+// The hook will NOT fetch until userId is a non-null string.
+// This prevents the Vercel production race condition where Firebase Auth
+// takes longer to initialize than the component mount, causing an unauthenticated
+// request that returns empty data which then gets cached as the "real" state.
+// ---------------------------------------------------------------------------
+export function useDashboard(userId?: string | null) {
+  // Initialise with cached data if available and valid for this user
+  const [data, setData] = useState<DashboardData | null>(() => readCache(userId));
+  const [loading, setLoading] = useState<boolean>(() => !isCacheValid(userId));
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(
     _cacheTimestamp ? new Date(_cacheTimestamp) : null
   );
 
-  const fetchDashboardData = useCallback(async (signal?: AbortSignal, force = false) => {
-    // Return immediately if cache is still fresh and not a forced refresh
-    if (!force && isCacheValid()) {
-      setData(_cachedData);
+  // Track previous userId to detect user account switches
+  const prevUserIdRef = useRef<string | null | undefined>(undefined);
+
+  const fetchDashboardData = useCallback(async (signal?: AbortSignal, force = false, forUserId?: string | null) => {
+    // CRITICAL: Never fetch without a confirmed authenticated userId.
+    // This is the primary fix for the production race condition.
+    if (!forUserId) {
       setLoading(false);
       return;
     }
 
+    // Return immediately if cache is still fresh and not a forced refresh
+    if (!force && isCacheValid(forUserId)) {
+      const cached = readCache(forUserId);
+      if (cached) {
+        setData(cached);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
+    setError(null);
     try {
       const backendData = await dashboardService.getDashboard(signal);
 
-      // Map complaint item
+      // Detect silent auth failure: api.ts resolves 401/403 as { error: true, authError: true }.
+      // If this happens, silently fail — the effect will re-run once userId is confirmed.
+      if ((backendData as any)?.error === true && (backendData as any)?.authError === true) {
+        setLoading(false);
+        return;
+      }
+
+      // Map complaint items
       const reportsList =
         backendData.recent_reports || (backendData as any).recent_complaints || [];
       const mappedReports: ReportItem[] = reportsList.map((r: any) => ({
@@ -92,7 +129,7 @@ export function useDashboard() {
         aiConfidenceScore: r.ai_confidence_score,
       }));
 
-      // Map hotspot item
+      // Map hotspot items
       const hotspotsList = backendData.nearby_hotspots || [];
       const mappedHotspots: HotspotItem[] = hotspotsList.map((h: any) => ({
         id: h.id,
@@ -188,8 +225,8 @@ export function useDashboard() {
         unreadNotifications: backendData.unread_notifications || 0,
       };
 
-      // Write to module-level cache
-      writeCache(formattedData);
+      // Write to module-level cache ONLY on confirmed successful responses
+      writeCache(formattedData, forUserId);
 
       setData(formattedData);
       setLastUpdated(new Date());
@@ -201,24 +238,38 @@ export function useDashboard() {
         return;
       }
       setError(err.message || "Failed to load dashboard data. Please try again.");
+    } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
-    // Only fetch if cache is stale — if cache is valid, show cached instantly
-    fetchDashboardData(controller.signal);
+
+    if (!userId) {
+      // Auth not resolved yet — keep loading state, wait for userId to become available
+      setLoading(true);
+      return () => controller.abort();
+    }
+
+    // If user switched accounts, clear the old user's cached data
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== userId) {
+      invalidateDashboardCache();
+    }
+    prevUserIdRef.current = userId;
+
+    fetchDashboardData(controller.signal, false, userId);
+
     return () => {
       controller.abort();
     };
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, userId]);
 
   /** Force a full refresh ignoring the cache (e.g. after submitting a new report) */
   const refreshDashboard = useCallback(() => {
     invalidateDashboardCache();
-    fetchDashboardData(undefined, true);
-  }, [fetchDashboardData]);
+    fetchDashboardData(undefined, true, userId ?? null);
+  }, [fetchDashboardData, userId]);
 
   return { data, loading, error, lastUpdated, refreshDashboard };
 }

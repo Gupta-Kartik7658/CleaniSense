@@ -73,7 +73,7 @@ api.interceptors.response.use(
     (appError as any).status = status;
     (appError as any).details = error.response?.data?.error?.details || [];
     
-    // Gracefully resolve network/auth errors from background prefetch calls
+    // Gracefully resolve network errors from background prefetch calls
     // to prevent Next.js dev overlay from showing on non-critical data loads
     if (error.code === 'ERR_NETWORK' || !status) {
       console.warn("[CleaniSense] Backend offline or unreachable.");
@@ -82,8 +82,9 @@ api.interceptors.response.use(
 
     if (status === 401 || status === 403) {
       // Auth-related failures during background/prefetch loads — resolve with empty payload
-      // so UI can fall back to mock data without triggering the dev error overlay
-      console.warn(`[CleaniSense] Auth required (${status}) for background request. Using fallback data.`);
+      // tagged with authError:true so hooks can detect it and NOT cache the result.
+      // The dashboard hook will silently discard this and wait for userId to confirm auth.
+      console.warn(`[CleaniSense] Auth required (${status}) for request. Signalling authError.`);
       return Promise.resolve({ error: true, authError: true, incidents: [], users: [], total: 0 } as any);
     }
     
