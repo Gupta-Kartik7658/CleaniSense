@@ -46,8 +46,39 @@ export const complaintService = {
     return api.get(`/complaints/${id}/resolution`, { signal });
   },
 
-  createComplaint(payload: ComplaintCreatePayload, signal?: AbortSignal): Promise<BackendComplaintItem> {
-    return api.post("/complaints", payload, { signal });
+  createComplaint(payload: ComplaintCreatePayload, attachments: File[], signal?: AbortSignal): Promise<BackendComplaintItem> {
+    const formData = new FormData();
+    formData.append("title", payload.title);
+    formData.append("description", payload.description);
+    formData.append("category_id", payload.category_id);
+    formData.append("location_name", payload.location_name);
+    formData.append("latitude", String(payload.latitude));
+    formData.append("longitude", String(payload.longitude));
+    if (payload.municipality_id) {
+      formData.append("municipality_id", payload.municipality_id);
+    }
+    if (payload.area_affected_sqm !== undefined && payload.area_affected_sqm !== null) {
+      formData.append("area_affected_sqm", String(payload.area_affected_sqm));
+    }
+    if (payload.population_affected !== undefined && payload.population_affected !== null) {
+      formData.append("population_affected", String(payload.population_affected));
+    }
+    if (payload.duration_hours !== undefined && payload.duration_hours !== null) {
+      formData.append("duration_hours", String(payload.duration_hours));
+    }
+    if (payload.survey_data) {
+      formData.append("survey_data", JSON.stringify(payload.survey_data));
+    }
+    attachments.forEach((file) => {
+      formData.append("files", file);
+    });
+
+    return api.post("/complaints", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data"
+      },
+      signal
+    });
   },
 
   uploadAttachment(complaintId: string, file: File, signal?: AbortSignal): Promise<AttachmentResponse> {

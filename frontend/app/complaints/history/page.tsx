@@ -1,51 +1,45 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
 
+type FilterType = "All" | "Under Review" | "Approved" | "Resolved" | "Rejected";
+
 export default function ComplaintsHistoryPage() {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<
-    "All" | "Pending" | "Under Review" | "Resolved" | "Rejected"
-  >("All");
+  const [filter, setFilter] = useState<FilterType>("All");
 
   const { complaintsData, fetchHistory, loading, error } = useComplaints();
 
-  const mapFilterToStatus = (f: string) => {
-    if (f === "Pending") return "submitted";
-    if (f === "Under Review") return "in_progress";
-    if (f === "Resolved") return "resolved";
-    if (f === "Rejected") return "rejected";
-    return undefined;
-  };
-
+  // Fetch ALL complaints once on mount — client-side filtering handles tabs
   useEffect(() => {
     const controller = new AbortController();
-    fetchHistory({
-      search: search || undefined,
-      status: mapFilterToStatus(filter),
-      page: 1,
-      page_size: 100
-    }, controller.signal);
+    fetchHistory({ page: 1, page_size: 200 }, controller.signal);
+    return () => { controller.abort(); };
+  }, [fetchHistory]);
 
-    return () => {
-      controller.abort();
-    };
-  }, [search, filter, fetchHistory]);
-
-  const mapStatus = (status: string): "Pending" | "Under Review" | "Resolved" | "Rejected" => {
+  const mapStatus = (status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" => {
     const lower = status.toLowerCase();
-    if (lower === "submitted" || lower === "draft") return "Pending";
     if (lower === "resolved") return "Resolved";
     if (lower === "rejected") return "Rejected";
+    if (
+      lower === "municipality_accepted" ||
+      lower === "officer_assigned" ||
+      lower === "in_progress" ||
+      lower === "inspection_completed"
+    )
+      return "Approved";
+    // submitted, draft, ai_verification_in_progress, ai_validation_completed → Under Review
     return "Under Review";
   };
 
-  const filteredReports = complaintsData && complaintsData.items
-    ? complaintsData.items.map((r) => ({
+  // Map all items once
+  const allReports = useMemo(
+    () =>
+      (complaintsData?.items ?? []).map((r) => ({
         id: r.id,
         title: r.title,
         status: mapStatus(r.status),
@@ -54,15 +48,34 @@ export default function ComplaintsHistoryPage() {
         longitude: r.longitude,
         date: r.created_at,
         category: (r as any).category ? (r as any).category.name : "Other",
-        severity: r.severity ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1) : "Medium",
-        severityScore: r.severity_score
-      }))
-    : [];
+        severity: r.severity
+          ? r.severity.charAt(0).toUpperCase() + r.severity.slice(1)
+          : "Medium",
+        severityScore: r.severity_score,
+      })),
+    [complaintsData]
+  );
+
+  // Filter & search entirely client-side — instant, no loading flicker
+  const filteredReports = useMemo(() => {
+    return allReports.filter((r) => {
+      const matchesFilter = filter === "All" || r.status === filter;
+      const term = search.toLowerCase();
+      const matchesSearch =
+        !term ||
+        r.title.toLowerCase().includes(term) ||
+        r.id.toLowerCase().includes(term) ||
+        r.locationName.toLowerCase().includes(term);
+      return matchesFilter && matchesSearch;
+    });
+  }, [allReports, filter, search]);
+
+  const TABS: FilterType[] = ["All", "Under Review", "Approved", "Resolved", "Rejected"];
 
   return (
     <PortalLayout>
       <div className="space-y-6 max-w-4xl mx-auto text-left">
-        
+
         {/* Page Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -83,7 +96,7 @@ export default function ComplaintsHistoryPage() {
 
         {/* Filters and Search Bar */}
         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-          
+
           {/* Search Box */}
           <div className="md:col-span-5 relative">
             <input
@@ -95,23 +108,27 @@ export default function ComplaintsHistoryPage() {
             />
           </div>
 
-          {/* Filter Toggles */}
+          {/* Filter Tabs — client-side, instant switching */}
           <div className="md:col-span-7 flex flex-wrap gap-1 text-[10px]">
-            {(["All", "Pending", "Under Review", "Resolved", "Rejected"] as const).map(
-              (status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition-all ${
-                    filter === status
-                      ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-400"
-                      : "border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
-                  }`}
-                >
-                  {status}
-                </button>
-              )
-            )}
+            {TABS.map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                className={`py-2 px-3 rounded-lg border font-bold cursor-pointer transition-all ${
+                  filter === status
+                    ? "border-emerald-600 bg-emerald-50/10 text-emerald-700 dark:text-emerald-400"
+                    : "border-slate-100 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                }`}
+              >
+                {status}
+                {/* Show count badge when a tab is active */}
+                {filter === status && status !== "All" && (
+                  <span className="ml-1 bg-emerald-600 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-full">
+                    {filteredReports.length}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -132,7 +149,7 @@ export default function ComplaintsHistoryPage() {
           <div className="bg-white dark:bg-slate-800 p-12 rounded-2xl border border-slate-200 dark:border-slate-700 text-center py-20">
             <span className="text-3xl block mb-2">📁</span>
             <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">
-              No complaints found matching the criteria.
+              No complaints found{filter !== "All" ? ` with status "${filter}"` : ""}.
             </p>
           </div>
         ) : (
@@ -145,18 +162,18 @@ export default function ComplaintsHistoryPage() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-[10px] font-mono bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded">
-                      #{report.id}
+                      #{report.id.substring(0, 8)}
                     </span>
                     <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-none">
                       {report.title}
                     </h4>
                     <StatusBadge status={report.status} />
                   </div>
-                  
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                     <p>
                       <span className="text-slate-400">🏷️</span> Category:{" "}
-                      <span className="font-semibold text-slate-700 dark:text-slate-350">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
                         {report.category}
                       </span>
                     </p>
@@ -193,7 +210,7 @@ export default function ComplaintsHistoryPage() {
                 <div className="shrink-0 flex items-center">
                   <Link
                     href={`/complaints/${report.id}`}
-                    className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-750 dark:text-slate-300 dark:border-slate-700 text-xs font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer block text-center w-full sm:w-auto"
+                    className="bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-300 dark:border-slate-700 text-xs font-bold px-5 py-2.5 rounded-xl transition-all cursor-pointer block text-center w-full sm:w-auto"
                   >
                     View Details
                   </Link>

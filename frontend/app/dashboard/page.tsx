@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
           {/* Right Column - 40% Width (col-span-5) */}
           <div className="lg:col-span-5">
-            <HotspotSection hotspots={data?.hotspots} loading={loading} />
+            <HotspotSection hotspots={data?.hotspots} mapData={data?.hotspotMap} loading={loading} />
           </div>
 
         </div>

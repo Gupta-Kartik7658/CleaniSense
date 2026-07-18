@@ -1,9 +1,11 @@
 import uuid
 from typing import Optional, List, Dict, Any
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone, timedelta
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.user import User
 from app.models.complaint import Complaint
+from app.schemas.complaint import ComplaintResponse
 from app.repositories.complaint import complaint_repository
 from app.services.complaint_service import complaint_service
 from app.services.complaint_cluster_service import complaint_cluster_service
@@ -40,13 +42,32 @@ class DashboardService:
             ]
             active_reports = sum(status_counts.get(status, 0) for status in active_statuses)
 
-            # 2. Get recent complaints
-            recent_items = complaint_service.get_history(
-                db=db,
-                current_user=current_user,
-                page=1,
-                page_size=5
-            )["items"]
+            # 2. Get all complaints within the last 14 days for the dashboard
+
+            two_weeks_ago = datetime.utcnow() - timedelta(days=14)
+            week_complaints = db.query(Complaint).options(
+                joinedload(Complaint.user)
+            ).filter(
+                Complaint.user_id == user_id,
+                Complaint.is_deleted == False,
+                Complaint.created_at >= two_weeks_ago
+            ).order_by(Complaint.created_at.desc()).all()
+
+            # Fallback for admins testing citizen view who might have no personal complaints
+            if not week_complaints and current_user.role != UserRole.CITIZEN.value:
+                week_complaints = db.query(Complaint).options(
+                    joinedload(Complaint.user)
+                ).filter(
+                    Complaint.is_deleted == False,
+                    Complaint.created_at >= two_weeks_ago
+                ).order_by(Complaint.created_at.desc()).all()
+
+            recent_items = []
+            for c in week_complaints:
+                try:
+                    recent_items.append(ComplaintResponse.model_validate(c).model_dump())
+                except Exception as ex:
+                    logger.error(f"Error validating complaint {c.id} for dashboard: {ex}")
 
             # 3. Handle coordinates fallback
             if latitude is None or longitude is None:
@@ -58,15 +79,28 @@ class DashboardService:
                     latitude = latest_complaint.latitude
                     longitude = latest_complaint.longitude
 
-            # 4. Proximity hotspots
-            nearby_h = hotspot_service.list_hotspots(
-                db=db,
-                latitude=latitude,
-                longitude=longitude,
-                radius_km=5.0
-            )
-            nearby_hotspots_list = nearby_h[:3]
-            nearby_hotspots_count = len(nearby_h)
+            # 4. Proximity hotspots (only hotspots near their reported incidents)
+            user_complaints = db.query(Complaint).filter(
+                Complaint.user_id == user_id,
+                Complaint.is_deleted == False,
+                Complaint.latitude.isnot(None),
+                Complaint.longitude.isnot(None)
+            ).all()
+
+            from app.services.hotspot_service import haversine
+            all_hotspots = hotspot_service.list_hotspots(db=db)
+            nearby_hotspots_list = []
+            for h in all_hotspots:
+                is_near = False
+                for c in user_complaints:
+                    if haversine(c.longitude, c.latitude, h.longitude, h.latitude) <= 5.0:
+                        is_near = True
+                        break
+                if is_near:
+                    nearby_hotspots_list.append(h)
+
+            nearby_hotspots_count = len(nearby_hotspots_list)
+            nearby_hotspots_list = nearby_hotspots_list[:3]
 
             # 5. Notifications
             unread_notifications = notification_service.count_unread(db, user_id)
@@ -74,8 +108,8 @@ class DashboardService:
             # 6. Preferences
             prefs = preference_service.get_or_create_preferences(db, user_id)
 
-            # 7. Map clustering
-            complaint_map = complaint_cluster_service.get_user_complaint_map(db, user_id)
+            # 7. System-wide Map clustering for Citizen Dashboard
+            complaint_map = complaint_cluster_service.get_all_complaint_map(db)
 
             return {
                 "overview": {
@@ -98,15 +132,35 @@ class DashboardService:
             # Lightweight Municipal/Admin Dashboard Summary orchestration
             municipality_id = current_user.municipality_id
             
-            # Delegate entirely to sub-service queries (No SQL queries or calculations here)
             overview = complaint_service.get_municipal_overview(db, municipality_id)
-            recent_complaints = complaint_service.get_recent_municipal_complaints(db, municipality_id)
             recent_activity = complaint_service.get_recent_municipal_activity(db, municipality_id)
+            
+            # Fetch 14-day complaints for recent reports in admin view as serialized dicts
+            two_weeks_ago = datetime.utcnow() - timedelta(days=14)
+            admin_complaints = db.query(Complaint).options(
+                joinedload(Complaint.user)
+            ).filter(
+                Complaint.is_deleted == False,
+                Complaint.created_at >= two_weeks_ago
+            ).order_by(Complaint.created_at.desc()).all()
+            
+            recent_reports_serialized = []
+            for c in admin_complaints:
+                try:
+                    recent_reports_serialized.append(ComplaintResponse.model_validate(c).model_dump())
+                except Exception:
+                    pass
+
+            complaint_map = complaint_cluster_service.get_user_complaint_map(db, current_user.id)
+            nearby_h = hotspot_service.list_hotspots(db)
             
             return {
                 "overview": overview,
-                "recent_complaints": recent_complaints,
-                "recent_activity": recent_activity
+                "recent_complaints": recent_reports_serialized,
+                "recent_reports": recent_reports_serialized,
+                "recent_activity": recent_activity,
+                "complaint_map": complaint_map,
+                "nearby_hotspots": nearby_h
             }
 
 dashboard_service = DashboardService()

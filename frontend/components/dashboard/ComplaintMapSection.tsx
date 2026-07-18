@@ -4,9 +4,9 @@ import dynamic from "next/dynamic";
 import { Skeleton } from "../common/Skeleton";
 import { ComplaintMapData } from "../../types/dashboard";
 
-const ComplaintLeafletMap = dynamic(
+const UserComplaintsMap = dynamic(
   () =>
-    import("./ComplaintLeafletMap").then((mod) => mod.ComplaintLeafletMap),
+    import("./UserComplaintsMap").then((mod) => mod.UserComplaintsMap),
   {
     ssr: false,
     loading: () => <Skeleton className="h-[420px] w-full rounded-2xl" />,
@@ -24,17 +24,17 @@ export function ComplaintMapSection({ mapData, loading = false }: ComplaintMapSe
       <div className="flex items-end justify-between">
         <div>
           <h2 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Complaint Map
+            Registered Incidents Map
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-            Your reports on OpenStreetMap — clusters form within 50 meters
+            Your registered reports plotted on OpenStreetMap — each with a unique color indicator
           </p>
         </div>
       </div>
       {loading ? (
         <Skeleton className="h-[420px] w-full rounded-2xl" />
       ) : (
-        <ComplaintLeafletMap mapData={mapData} loading={false} />
+        <UserComplaintsMap complaints={mapData?.user_complaints || []} loading={false} />
       )}
     </section>
   );

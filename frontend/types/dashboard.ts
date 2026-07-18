@@ -62,6 +62,7 @@ export interface ComplaintHotspotCluster {
   radius_meters: number;
   complaint_ids: string[];
   complaints: ComplaintMapPoint[];
+  dominant_category?: string | null;
 }
 
 export interface ComplaintMapData {
@@ -69,6 +70,7 @@ export interface ComplaintMapData {
   hotspots: ComplaintHotspotCluster[];
   total_complaints: number;
   hotspot_radius_meters: number;
+  user_complaints?: ComplaintMapPoint[];
 }
 
 export interface BackendDashboardResponse {
@@ -91,7 +93,7 @@ export interface StatCardData {
 export interface ReportItem {
   id: string;
   title: string;
-  status: "Pending" | "Under Review" | "Resolved" | "Rejected";
+  status: "Under Review" | "Resolved" | "Rejected" | "Approved";
   locationName: string;
   latitude: number;
   longitude: number;
@@ -118,5 +120,6 @@ export interface DashboardData {
   reports: ReportItem[];
   hotspots: HotspotItem[];
   complaintMap: ComplaintMapData;
+  hotspotMap?: ComplaintMapData;
   unreadNotifications?: number;
 }

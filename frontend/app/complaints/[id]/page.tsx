@@ -26,15 +26,15 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
     };
   }, [id, user, authLoading, fetchDetail]);
 
-  const mapStatus = (status: string): "Pending" | "Under Review" | "Resolved" | "Rejected" => {
+  const mapStatus = (status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" => {
     const lower = status.toLowerCase();
-    if (lower === "submitted" || lower === "draft") return "Pending";
     if (lower === "resolved") return "Resolved";
     if (lower === "rejected") return "Rejected";
+    if (lower === "municipality_accepted" || lower === "officer_assigned" || lower === "in_progress" || lower === "inspection_completed") return "Approved";
     return "Under Review";
   };
 
-  const statusMapped = complaintDetail ? mapStatus(complaintDetail.status) : "Pending";
+  const statusMapped = complaintDetail ? mapStatus(complaintDetail.status) : "Under Review";
   const severityMapped = complaintDetail?.severity ? complaintDetail.severity.charAt(0).toUpperCase() + complaintDetail.severity.slice(1) : "Medium";
   const severityScore = complaintDetail?.severity_score;
 
@@ -122,7 +122,11 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                     Responsible Authority
                   </span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">
-                    {complaintDetail.municipality ? complaintDetail.municipality.name : "Pending Assignment"}
+                    {complaintDetail.municipality 
+                      ? complaintDetail.municipality.name 
+                      : (complaintDetail.status !== "submitted" && complaintDetail.status !== "draft" && complaintDetail.status !== "ai_verification_in_progress"
+                        ? "Municipal Corporation (Assigned)"
+                        : "Pending Assignment")}
                   </span>
                 </div>
                 <div>

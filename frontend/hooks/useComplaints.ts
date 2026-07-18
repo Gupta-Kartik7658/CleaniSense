@@ -72,15 +72,7 @@ export function useComplaints() {
     setLoading(true);
     setError(null);
     try {
-      const complaint = await complaintService.createComplaint(payload);
-      
-      // Upload all attachments concurrently using Promise.all
-      if (attachments && attachments.length > 0) {
-        await Promise.all(
-          attachments.map((file) => complaintService.uploadAttachment(complaint.id, file))
-        );
-      }
-      
+      const complaint = await complaintService.createComplaint(payload, attachments);
       return complaint;
     } catch (err: any) {
       setError(err.message || "Failed to submit complaint.");

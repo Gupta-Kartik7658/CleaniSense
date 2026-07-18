@@ -75,3 +75,13 @@ class Complaint(Base):
     weather_observation: Mapped[Optional["WeatherObservation"]] = relationship(
         "WeatherObservation", back_populates="complaint", uselist=False, cascade="all, delete-orphan"
     )
+
+    @property
+    def user_name(self) -> str:
+        """Return the reporter's display name from the user relationship."""
+        return self.user.name if self.user and self.user.name else "Unknown Reporter"
+
+    @property
+    def user_email(self) -> str:
+        """Return the reporter's email from the user relationship."""
+        return self.user.email if self.user and self.user.email else ""

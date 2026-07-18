@@ -94,7 +94,16 @@ class ComplaintRepository:
             query = query.filter(Complaint.municipality_id == municipality_id)
 
         if status:
-            query = query.filter(Complaint.status == status)
+            if status == "under_review":
+                query = query.filter(Complaint.status.in_(["submitted", "draft", "ai_verification_in_progress", "ai_validation_completed"]))
+            elif status == "approved":
+                query = query.filter(Complaint.status.in_(["municipality_accepted", "officer_assigned", "in_progress", "inspection_completed"]))
+            elif status == "resolved":
+                query = query.filter(Complaint.status == "resolved")
+            elif status == "rejected":
+                query = query.filter(Complaint.status == "rejected")
+            else:
+                query = query.filter(Complaint.status == status)
         if category_id:
             query = query.filter(Complaint.category_id == category_id)
         if search:

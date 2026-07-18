@@ -152,6 +152,9 @@ class ComplaintResponse(BaseModel):
     assigned_officer: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    # Reporter info sourced from Complaint.user relationship
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
 
     class Config:
         from_attributes = True

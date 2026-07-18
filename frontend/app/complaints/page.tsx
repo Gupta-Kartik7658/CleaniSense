@@ -7,6 +7,12 @@ import { configService } from "@/services/config";
 import { CategoryResponse } from "@/types/config";
 import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
+
+const LocationSelectorMap = dynamic(
+  () => import("@/components/dashboard/LocationSelectorMap"),
+  { ssr: false, loading: () => <div className="h-[220px] bg-slate-100 dark:bg-slate-905/30 animate-pulse rounded-xl border border-slate-200 dark:border-slate-800" /> }
+);
 
 export default function ComplaintsPage() {
   const router = useRouter();
@@ -36,8 +42,8 @@ export default function ComplaintsPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileErrors, setFileErrors] = useState<string | null>(null);
 
-  // Status flags
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
+  // UI state
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Load config on mount
   const [configError, setConfigError] = useState<string | null>(null);
@@ -66,13 +72,25 @@ export default function ComplaintsPage() {
     fetchConfig();
   }, []);
 
-  // Sync geolocation coordinates
+  // Sync geolocation coordinates on load
   useEffect(() => {
+    if (coords && !lat && !lng) {
+      setLat(String(coords.latitude.toFixed(6)));
+      setLng(String(coords.longitude.toFixed(6)));
+    }
+  }, [coords, lat, lng]);
+
+  const handleMapLocationChange = (newLat: number, newLng: number) => {
+    setLat(String(newLat.toFixed(6)));
+    setLng(String(newLng.toFixed(6)));
+  };
+
+  const handleUseCurrentLocation = () => {
     if (coords) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
     }
-  }, [coords]);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileErrors(null);
@@ -107,6 +125,21 @@ export default function ComplaintsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFileErrors(null);
+
+    // Compulsory check: At least 1 file upload (photo)
+    if (selectedFiles.length === 0) {
+      setFileErrors("Please upload at least one image file of the pollution issue.");
+      return;
+    }
+
+    const selectedCategory = categories.find((c) => c.id === categoryId);
+    const categoryName = selectedCategory ? selectedCategory.name : "Environmental Pollution";
+
+    // Autofill optional inputs before backend schema validations
+    const finalTitle = title.trim() || `${categoryName} Report`;
+    const finalDescription = description.trim() || `Reported environmental issue regarding ${categoryName} with ${severityHint} severity at coordinates (${lat}, ${lng}). Please refer to uploaded image evidence for AI validation.`;
+    const finalLocationName = locationName.trim() || `GPS Coordinates Location (${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)})`;
 
     const parsedLat = parseFloat(lat);
     const parsedLng = parseFloat(lng);
@@ -114,41 +147,38 @@ export default function ComplaintsPage() {
     const parsedPopulation = populationAffected ? parseInt(populationAffected, 10) : undefined;
     const parsedDuration = durationHours ? parseFloat(durationHours) : undefined;
 
-    if (!categoryId || !title.trim() || !description.trim() || !locationName.trim() || !lat || !lng) {
+    if (!categoryId || !lat || !lng) {
+      setFileErrors("Please select a category and specify a valid location.");
       return;
     }
 
-    if (title.trim().length < 5) {
+    if (finalTitle.length < 5) {
+      setFileErrors("Title must be at least 5 characters long.");
       return;
     }
 
-    if (description.trim().length < 20) {
+    if (finalDescription.length < 20) {
+      setFileErrors("Description must be at least 20 characters long.");
       return;
     }
 
     if (Number.isNaN(parsedLat) || parsedLat < -90 || parsedLat > 90) {
+      setFileErrors("Invalid latitude coordinates. Must be between -90 and 90.");
       return;
     }
 
     if (Number.isNaN(parsedLng) || parsedLng < -180 || parsedLng > 180) {
-      return;
-    }
-
-    if (
-      (parsedArea !== undefined && (Number.isNaN(parsedArea) || parsedArea < 0)) ||
-      (parsedPopulation !== undefined && (Number.isNaN(parsedPopulation) || parsedPopulation < 0)) ||
-      (parsedDuration !== undefined && (Number.isNaN(parsedDuration) || parsedDuration < 0))
-    ) {
+      setFileErrors("Invalid longitude coordinates. Must be between -180 and 180.");
       return;
     }
 
     try {
-      const complaint = await createComplaint(
+      await createComplaint(
         {
-          title: title.trim(),
-          description: description.trim(),
+          title: finalTitle,
+          description: finalDescription,
           category_id: categoryId,
-          location_name: locationName.trim(),
+          location_name: finalLocationName,
           latitude: parsedLat,
           longitude: parsedLng,
           area_affected_sqm: parsedArea,
@@ -163,15 +193,10 @@ export default function ComplaintsPage() {
         selectedFiles
       );
 
-      // Trigger Success Toast
-      setShowSuccessToast(true);
+      // Redirect instantly back to citizen dashboard (user panel)
+      router.push("/dashboard");
 
-      // Wait 1.5 seconds for visual feedback, refresh dashboard, and redirect
-      setTimeout(() => {
-        router.push(`/complaints/${complaint.id}`);
-      }, 1500);
-
-    } catch (err) {
+    } catch (err: any) {
       console.error("Submission failed:", err);
     }
   };
@@ -180,20 +205,12 @@ export default function ComplaintsPage() {
     <PortalLayout>
       <div className="space-y-6 max-w-2xl mx-auto p-4 text-left relative">
         
-        {/* Success Toast */}
-        {showSuccessToast && (
-          <div className="fixed top-20 right-6 z-50 bg-emerald-600 text-white font-semibold py-3 px-6 rounded-xl shadow-lg flex items-center gap-3 animate-bounce">
-            <span>✅</span>
-            <span>Complaint submitted successfully! Redirecting...</span>
-          </div>
-        )}
-
         <div>
           <h2 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Report Environmental Issue
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Submit details of environmental pollution in your locality for municipal verification
+          <p className="text-xs text-slate-500 dark:text-slate-405">
+            Submit a fast report. Choose the category, severity, coordinates, and upload your evidence.
           </p>
         </div>
 
@@ -220,123 +237,47 @@ export default function ComplaintsPage() {
               </div>
             )}
 
-            {/* Title */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Issue Title <span className="text-slate-400 font-normal">(min 5 characters)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Blocked Drainage Overflow, Plastic dumping"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-                minLength={5}
-                maxLength={500}
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-              />
-              {title && title.length < 5 && (
-                <p className="text-[10px] text-rose-600 font-semibold mt-1">Title must be at least 5 characters long.</p>
-              )}
-            </div>
-
-            {/* Category Dropdown */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Category
-              </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                required
-                disabled={categories.length === 0}
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {categories.length === 0 ? (
-                  <option value="">No categories available</option>
-                ) : (
-                  categories.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            {/* Description */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Description <span className="text-slate-400 font-normal">(min 20 characters)</span>
-              </label>
-              <textarea
-                placeholder="Provide a detailed description of the pollution issue, source, and severity..."
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-                minLength={20}
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-              />
-              {description && description.length < 20 && (
-                <p className="text-[10px] text-rose-600 font-semibold mt-1">Description must be at least 20 characters long.</p>
-              )}
-            </div>
-
-            {/* Location Name */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Area Affected
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="sq. meters"
-                  value={areaAffected}
-                  onChange={(e) => setAreaAffected(e.target.value)}
-                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                />
+            {fileErrors && (
+              <div className="p-4 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold">
+                ⚠️ {fileErrors}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  People Affected
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="count"
-                  value={populationAffected}
-                  onChange={(e) => setPopulationAffected(e.target.value)}
-                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Duration
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.5"
-                  placeholder="hours"
-                  value={durationHours}
-                  onChange={(e) => setDurationHours(e.target.value)}
-                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                />
-              </div>
-            </div>
+            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Normal Form Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Category Dropdown */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Observed Severity
+                  Category <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  required
+                  disabled={categories.length === 0}
+                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer disabled:opacity-50"
+                >
+                  {categories.length === 0 ? (
+                    <option value="">No categories available</option>
+                  ) : (
+                    categories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              {/* Observed Severity */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                  Observed Severity <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={severityHint}
                   onChange={(e) => setSeverityHint(e.target.value)}
+                  required
                   className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 cursor-pointer"
                 >
                   <option value="normal">Normal</option>
@@ -345,93 +286,64 @@ export default function ComplaintsPage() {
                   <option value="critical">Critical</option>
                 </select>
               </div>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={vulnerablePeopleNearby}
-                  onChange={(e) => setVulnerablePeopleNearby(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
-                />
-                Vulnerable people nearby
-              </label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={activeLeakOrFire}
-                  onChange={(e) => setActiveLeakOrFire(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600"
-                />
-                Active leak or fire
-              </label>
             </div>
 
-            {/* Location Name */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                Location Address
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Near Sagar Society Gate, Satellite Road"
-                value={locationName}
-                onChange={(e) => setLocationName(e.target.value)}
-                required
-                className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-              />
-            </div>
-
-            {/* Geolocation Coordinates */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Latitude
-                </label>
-                <input
-                  type="number"
-                  step="0.000001"
-                  placeholder="e.g. 23.0305"
-                  value={lat}
-                  onChange={(e) => setLat(e.target.value)}
-                  required
-                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                />
+            {/* Geolocation Section */}
+            <div className="space-y-2 border-t border-slate-100 dark:border-slate-700 pt-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                    Location Mapping <span className="text-rose-500">*</span>
+                  </label>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-400">
+                    Click/tap on the map to set the exact coordinates of the pollution site
+                  </p>
+                </div>
+                {coords && (
+                  <button
+                    type="button"
+                    onClick={handleUseCurrentLocation}
+                    className="text-[10px] text-emerald-650 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded"
+                  >
+                    📍 Reset to My Location
+                  </button>
+                )}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Longitude
-                </label>
-                <input
-                  type="number"
-                  step="0.000001"
-                  placeholder="e.g. 72.5074"
-                  value={lng}
-                  onChange={(e) => setLng(e.target.value)}
-                  required
-                  className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-slate-50 dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600"
-                />
-              </div>
-            </div>
 
-            {loadingLocation && (
-              <p className="text-[10px] text-emerald-600 font-semibold italic animate-pulse">
-                📍 Fetching live browser coordinates...
-              </p>
-            )}
+              {/* Map container */}
+              {lat && lng ? (
+                <LocationSelectorMap
+                  latitude={parseFloat(lat)}
+                  longitude={parseFloat(lng)}
+                  onChange={handleMapLocationChange}
+                />
+              ) : (
+                <div className="h-[220px] bg-slate-100 dark:bg-slate-900 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-800">
+                  <p className="text-[11px] text-slate-450 italic animate-pulse">
+                    📍 Fetching geolocation coordinates...
+                  </p>
+                </div>
+              )}
+
+              {/* Coordinate label */}
+              {lat && lng && (
+                <div className="flex justify-between items-center text-[10px] bg-slate-50 dark:bg-slate-900/50 border border-slate-150 dark:border-slate-800 p-2 rounded-lg text-slate-600 dark:text-slate-450">
+                  <span>Selected Coordinates: <strong className="text-slate-800 dark:text-white font-extrabold">{parseFloat(lat).toFixed(6)}, {parseFloat(lng).toFixed(6)}</strong></span>
+                  {loadingLocation && <span className="animate-pulse italic text-emerald-650 font-semibold">Updating...</span>}
+                </div>
+              )}
+            </div>
 
             {/* Media Uploads */}
-            <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-700">
               <div className="flex justify-between items-center">
                 <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                  Attachments (Evidence)
+                  Photo Evidence <span className="text-rose-500">*</span>
                 </label>
                 <span className="text-[10px] text-slate-400 font-medium">
                   {selectedFiles.length}/{maxAttachments} files
                 </span>
               </div>
-
-              {fileErrors && (
-                <p className="text-[10px] text-rose-600 font-semibold">⚠️ {fileErrors}</p>
-              )}
 
               {/* Upload Drag Target */}
               <div className="relative border-2 border-dashed border-slate-200 dark:border-slate-750 hover:border-emerald-600 rounded-xl p-6 text-center cursor-pointer transition-colors duration-150">
@@ -481,6 +393,164 @@ export default function ComplaintsPage() {
               )}
             </div>
 
+            {/* Advanced Section Dropdown */}
+            <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen(!advancedOpen)}
+                className="w-full flex items-center justify-between py-2 text-xs font-bold text-slate-650 dark:text-slate-300 hover:text-slate-900 hover:dark:text-white transition-colors cursor-pointer select-none"
+              >
+                <span className="flex items-center gap-1.5">
+                  <span>⚙</span> Advanced Options
+                </span>
+                <span className={`transform transition-transform ${advancedOpen ? "rotate-180" : "rotate-0"}`}>
+                  ▼
+                </span>
+              </button>
+
+              {advancedOpen && (
+                <div className="mt-4 space-y-4 bg-slate-50/50 dark:bg-slate-900/20 border border-slate-100 dark:border-slate-800/80 p-4 rounded-xl animate-fadeIn">
+                  
+                  {/* Title */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Custom Title <span className="text-slate-400 font-normal">(Optional, min 5 chars)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Open trash burning in playground"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Custom Description <span className="text-slate-405 font-normal">(Optional, min 20 chars)</span>
+                    </label>
+                    <textarea
+                      placeholder="Describe the issue, sources, and surrounding situation..."
+                      rows={3}
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600 resize-none"
+                    />
+                  </div>
+
+                  {/* Location Landmark Address */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      Location Landmark Address <span className="text-slate-405 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Behind Sagar Tower, Lane 4"
+                      value={locationName}
+                      onChange={(e) => setLocationName(e.target.value)}
+                      className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 dark:text-white focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
+
+                  {/* Impact Stats Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Area Affected (sqm)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="sq. meters"
+                        value={areaAffected}
+                        onChange={(e) => setAreaAffected(e.target.value)}
+                        className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        People Impacted
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="count"
+                        value={populationAffected}
+                        onChange={(e) => setPopulationAffected(e.target.value)}
+                        className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Duration (hours)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        placeholder="hours"
+                        value={durationHours}
+                        onChange={(e) => setDurationHours(e.target.value)}
+                        className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 focus:outline-none focus:border-emerald-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Geolocation Coordinate Inputs */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Override Latitude
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={lat}
+                        onChange={(e) => setLat(e.target.value)}
+                        className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 focus:outline-none"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                        Override Longitude
+                      </label>
+                      <input
+                        type="number"
+                        step="0.000001"
+                        value={lng}
+                        onChange={(e) => setLng(e.target.value)}
+                        className="w-full text-xs border border-slate-200 dark:border-slate-700 rounded-lg p-2.5 bg-white dark:bg-slate-900 text-slate-850 focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Checkboxes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 select-none cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={vulnerablePeopleNearby}
+                        onChange={(e) => setVulnerablePeopleNearby(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer"
+                      />
+                      Vulnerable people nearby
+                    </label>
+                    <label className="flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 select-none cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={activeLeakOrFire}
+                        onChange={(e) => setActiveLeakOrFire(e.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-600 cursor-pointer"
+                      />
+                      Active leak or fire
+                    </label>
+                  </div>
+
+                </div>
+              )}
+            </div>
+
             {/* Actions Panel */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-700 flex justify-end gap-3">
               <button
@@ -492,7 +562,7 @@ export default function ComplaintsPage() {
               </button>
               <button
                 type="submit"
-                disabled={submitting || categories.length === 0 || title.length < 5 || description.length < 20}
+                disabled={submitting || categories.length === 0}
                 className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-500 disabled:cursor-not-allowed text-white font-bold py-2.5 px-6 rounded-xl shadow-sm transition-colors text-xs cursor-pointer flex items-center justify-center gap-2"
               >
                 {submitting ? (

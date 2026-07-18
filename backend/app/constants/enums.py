@@ -9,6 +9,7 @@ class UserRole(str, Enum):
 class ComplaintStatus(str, Enum):
     DRAFT = "draft"
     SUBMITTED = "submitted"
+    AI_VERIFICATION_IN_PROGRESS = "ai_verification_in_progress"
     AI_VALIDATION_COMPLETED = "ai_validation_completed"
     MUNICIPALITY_ACCEPTED = "municipality_accepted"
     OFFICER_ASSIGNED = "officer_assigned"

@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
@@ -23,24 +23,107 @@ logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/complaints", tags=["complaints"])
 
 @router.post("", response_model=StandardResponseModel, status_code=status.HTTP_201_CREATED, summary="Submit Environmental Complaint", description="Registers a new environmental incident report in the system.")
-def create_complaint(
-    complaint_in: ComplaintCreate,
+async def create_complaint(
+    background_tasks: BackgroundTasks,
+    title: str = Form(...),
+    description: str = Form(...),
+    category_id: uuid.UUID = Form(...),
+    location_name: str = Form(...),
+    latitude: float = Form(...),
+    longitude: float = Form(...),
+    municipality_id: Optional[uuid.UUID] = Form(None),
+    area_affected_sqm: Optional[float] = Form(None),
+    population_affected: Optional[int] = Form(None),
+    duration_hours: Optional[float] = Form(None),
+    survey_data: Optional[str] = Form(None),
+    files: List[UploadFile] = File(default=[]),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Submit a new environmental complaint.
     """
+    import json
+    from app.constants.enums import ComplaintStatus
+    
     logger.info(
-        f"Creating complaint — user={current_user.id} "
-        f"category={complaint_in.category_id} title='{complaint_in.title[:50]}'"
+        f"Creating async complaint — user={current_user.id} "
+        f"category={category_id} title='{title[:50]}'"
     )
-    complaint = complaint_service.create_complaint(db, complaint_in, current_user.id)
-    logger.info(f"Complaint created — id={complaint.id} status={complaint.status}")
+    
+    # 1. Parse survey_data from JSON string if provided
+    parsed_survey = None
+    if survey_data:
+        try:
+            parsed_survey = json.loads(survey_data)
+        except Exception:
+            logger.warning(f"Failed to parse survey_data JSON string: {survey_data}")
+
+    # 2. Build Schema input (to validate and pass to repository)
+    complaint_in = ComplaintCreate(
+        title=title,
+        description=description,
+        category_id=category_id,
+        location_name=location_name,
+        latitude=latitude,
+        longitude=longitude,
+        municipality_id=municipality_id,
+        area_affected_sqm=area_affected_sqm,
+        population_affected=population_affected,
+        duration_hours=duration_hours,
+        survey_data=parsed_survey
+    )
+
+    # 3. Validate category existence
+    from app.models.complaint_category import ComplaintCategory
+    category = db.query(ComplaintCategory).filter(
+        ComplaintCategory.id == category_id,
+        ComplaintCategory.is_active == True
+    ).first()
+    if not category:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Selected complaint category is invalid or inactive"
+        )
+        
+    # 4. Create database complaint record immediately with "ai_verification_in_progress" status
+    from app.repositories.complaint import complaint_repository
+    complaint = complaint_repository.create(db, complaint_in, current_user.id)
+    complaint.status = ComplaintStatus.AI_VERIFICATION_IN_PROGRESS.value
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+
+    # 5. Log initial timeline history entry
+    from app.services.complaint_service import complaint_service, verify_complaint_pipeline
+    complaint_service._add_status_history_entry(
+        db, 
+        complaint.id, 
+        complaint.status, 
+        "AI Verification in Progress", 
+        current_user.id
+    )
+    
+    # 6. Read attachments into memory to process asynchronously in background
+    raw_files = []
+    for file in files:
+        content = await file.read()
+        raw_files.append((file.filename, content, file.content_type))
+
+    # 7. Queue the background AI Verification & enrichment pipeline
+    background_tasks.add_task(
+        verify_complaint_pipeline,
+        complaint.id,
+        raw_files,
+        current_user.id
+    )
+    
+    logger.info(f"Complaint saved and background pipeline queued — id={complaint.id} status={complaint.status}")
     complaint_data = ComplaintResponse.model_validate(complaint)
+    
     return standard_response(
         success=True,
-        message="Complaint submitted successfully",
+        message="Complaint submitted successfully, AI Verification in progress",
         data=complaint_data
     )
 
@@ -52,7 +135,7 @@ def list_complaints(
     sort_by: str = Query("created_at"),
     sort_order: str = Query("desc"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=100),
+    page_size: int = Query(20, ge=1, le=500),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
