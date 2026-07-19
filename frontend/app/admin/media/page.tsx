@@ -193,8 +193,9 @@ export default function MediaPage() {
         const resSum = item.resolution?.summary || item.resolutionSummary || '';
         const resAct = item.resolution?.actions || item.resolutionActions || '';
         const officer = item.assignedOfficer || item.assigned_officer || item.resolution?.officer_name || '';
-        const fullDesc = item.description || item.short_description || item.title || '';
-        const shortDesc = item.short_description || item.title || (item.description ? item.description.slice(0, 45) + '...' : 'Incident Report');
+        const fullDesc = item.description || item.title || item.shortDescription || 'No detailed description provided.';
+        const titleText = item.title || item.shortDescription || item.short_description || '';
+        const shortDesc = titleText ? titleText : `${catName} Incident Report`;
         const resAfter = item.resolution?.after_image_url || item.resolution_report?.after_image_url || item.after_image_url || null;
 
         const mediaUrls = item.mediaUrls || [];

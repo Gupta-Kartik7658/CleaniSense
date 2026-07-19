@@ -123,6 +123,8 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
         "userId": str(complaint.user_id),
         "userName": complaint.user.name or "Citizen",
         "userEmail": complaint.user.email,
+        "title": complaint.title,
+        "shortDescription": complaint.title,
         "type": flow_type,
         "categoryName": complaint.category.name if complaint.category else "Environmental",
         "assignedOfficer": officer_name,
