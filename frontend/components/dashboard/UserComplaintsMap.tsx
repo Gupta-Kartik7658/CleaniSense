@@ -54,9 +54,16 @@ function FitMapBounds({ points }: { points: [number, number][] }) {
 }
 
 export function UserComplaintsMap({ complaints = [], loading = false }: UserComplaintsMapProps) {
-  const boundsPoints = useMemo<[number, number][]>(() => {
-    return complaints.map((c) => [c.latitude, c.longitude] as [number, number]);
+  const validComplaints = useMemo(() => {
+    return complaints.filter((c: any) => {
+      const isLowSeverity = c.status === "no_pollution_detected" || (c.severity_score !== undefined && c.severity_score !== null && c.severity_score < 20);
+      return !isLowSeverity;
+    });
   }, [complaints]);
+
+  const boundsPoints = useMemo<[number, number][]>(() => {
+    return validComplaints.map((c) => [c.latitude, c.longitude] as [number, number]);
+  }, [validComplaints]);
 
   const defaultCenter = useMemo<[number, number]>(() => {
     if (boundsPoints.length > 0) return boundsPoints[0];
@@ -67,7 +74,7 @@ export function UserComplaintsMap({ complaints = [], loading = false }: UserComp
     return <Skeleton className="h-[420px] w-full rounded-2xl" />;
   }
 
-  if (complaints.length === 0) {
+  if (validComplaints.length === 0) {
     return (
       <div className="h-[420px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center text-center p-8">
         <span className="text-4xl mb-3">🗺️</span>
@@ -95,7 +102,7 @@ export function UserComplaintsMap({ complaints = [], loading = false }: UserComp
             Your Registered Reports
           </p>
           <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold">
-            {complaints.length} active report{complaints.length !== 1 ? "s" : ""}
+            {validComplaints.length} active report{validComplaints.length !== 1 ? "s" : ""}
           </p>
         </div>
       </div>
@@ -113,7 +120,7 @@ export function UserComplaintsMap({ complaints = [], loading = false }: UserComp
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitMapBounds points={boundsPoints} />
-          {complaints.map((c) => {
+          {validComplaints.map((c) => {
             const color = getMarkerColor(c.id);
             return (
               <CircleMarker

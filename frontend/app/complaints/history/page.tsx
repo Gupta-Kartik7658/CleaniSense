@@ -21,8 +21,11 @@ export default function ComplaintsHistoryPage() {
     return () => { controller.abort(); };
   }, [fetchHistory]);
 
-  const mapStatus = (status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" => {
-    const lower = status.toLowerCase();
+  const mapStatus = (status: string, severityScore?: number): "Under Review" | "Resolved" | "Rejected" | "Approved" | "No Pollution Detected" => {
+    const lower = (status || "").toLowerCase();
+    if (lower === "no_pollution_detected" || (severityScore !== undefined && severityScore !== null && severityScore < 20)) {
+      return "No Pollution Detected";
+    }
     if (lower === "resolved") return "Resolved";
     if (lower === "rejected") return "Rejected";
     if (
@@ -32,7 +35,6 @@ export default function ComplaintsHistoryPage() {
       lower === "inspection_completed"
     )
       return "Approved";
-    // submitted, draft, ai_verification_in_progress, ai_validation_completed → Under Review
     return "Under Review";
   };
 
@@ -42,7 +44,7 @@ export default function ComplaintsHistoryPage() {
       (complaintsData?.items ?? []).map((r: any) => ({
         id: r.id,
         title: r.title,
-        status: mapStatus(r.status),
+        status: mapStatus(r.status, r.severity_score),
         rawStatus: r.status,
         description: r.description || "",
         shortDescription: r.short_description || "",

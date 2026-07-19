@@ -17,24 +17,35 @@ export function useCurrentLocation() {
     }
 
     setLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setCoords({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude
-        });
-        setLoading(false);
-      },
-      (err) => {
-        setError(err.message || "Failed to retrieve location.");
-        setLoading(false);
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000 // 5 minutes cache
-      }
-    );
+
+    const tryGetPosition = (highAccuracy: boolean) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCoords({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+          setLoading(false);
+          setError(null);
+        },
+        (err) => {
+          if (highAccuracy) {
+            // Fallback to low accuracy mode for desktop browsers or slow GPS
+            tryGetPosition(false);
+          } else {
+            setError(err.message || "Failed to retrieve location.");
+            setLoading(false);
+          }
+        },
+        {
+          enableHighAccuracy: highAccuracy,
+          timeout: highAccuracy ? 5000 : 7000,
+          maximumAge: 300000 // 5 minutes cache
+        }
+      );
+    };
+
+    tryGetPosition(true);
   }, []);
 
   return { coords, loading, error };

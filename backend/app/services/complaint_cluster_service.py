@@ -135,6 +135,9 @@ class ComplaintClusterService:
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
+                # Exclude reports with severity < 20% from map plotting
+                (Complaint.severity_score >= 20.0) | (Complaint.severity_score == None),
+                Complaint.status != ComplaintStatus.NO_POLLUTION_DETECTED.value,
             )
             .order_by(Complaint.created_at.desc())
             .all()
@@ -147,6 +150,7 @@ class ComplaintClusterService:
                 ComplaintStatus.RESOLVED.value,
                 ComplaintStatus.REJECTED.value,
                 ComplaintStatus.ARCHIVED.value,
+                ComplaintStatus.NO_POLLUTION_DETECTED.value,
             ]
         ]
         result = cluster_complaints(active_complaints, radius_meters=radius_meters)
@@ -160,6 +164,7 @@ class ComplaintClusterService:
         municipality_id: uuid.UUID,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
+        from sqlalchemy import or_
         complaints = (
             db.query(Complaint)
             .options(joinedload(Complaint.category), joinedload(Complaint.resolution))
@@ -168,10 +173,12 @@ class ComplaintClusterService:
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
+                or_(Complaint.severity_score >= 20.0, Complaint.severity_score == None),
                 Complaint.status.notin_([
                     ComplaintStatus.RESOLVED.value,
                     ComplaintStatus.REJECTED.value,
                     ComplaintStatus.ARCHIVED.value,
+                    ComplaintStatus.NO_POLLUTION_DETECTED.value,
                 ])
             )
             .order_by(Complaint.created_at.desc())
@@ -186,6 +193,7 @@ class ComplaintClusterService:
         db: Session,
         radius_meters: float = HOTSPOT_RADIUS_METERS,
     ) -> Dict[str, Any]:
+        from sqlalchemy import or_
         complaints = (
             db.query(Complaint)
             .options(joinedload(Complaint.category), joinedload(Complaint.resolution))
@@ -193,10 +201,12 @@ class ComplaintClusterService:
                 Complaint.is_deleted == False,
                 Complaint.latitude.isnot(None),
                 Complaint.longitude.isnot(None),
+                or_(Complaint.severity_score >= 20.0, Complaint.severity_score == None),
                 Complaint.status.notin_([
                     ComplaintStatus.RESOLVED.value,
                     ComplaintStatus.REJECTED.value,
                     ComplaintStatus.ARCHIVED.value,
+                    ComplaintStatus.NO_POLLUTION_DETECTED.value,
                 ])
             )
             .order_by(Complaint.created_at.desc())

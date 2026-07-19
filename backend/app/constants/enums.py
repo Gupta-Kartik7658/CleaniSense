@@ -18,6 +18,7 @@ class ComplaintStatus(str, Enum):
     RESOLVED = "resolved"
     REJECTED = "rejected"
     ARCHIVED = "archived"
+    NO_POLLUTION_DETECTED = "no_pollution_detected"
 
 class ComplaintSeverity(str, Enum):
     HIGH = "high"

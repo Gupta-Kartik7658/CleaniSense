@@ -72,13 +72,21 @@ export default function ComplaintsPage() {
     fetchConfig();
   }, []);
 
-  // Sync geolocation coordinates on load
+  // Default fallback coordinates (Mumbai, India)
+  const DEFAULT_FALLBACK_LAT = "19.076000";
+  const DEFAULT_FALLBACK_LNG = "72.877700";
+
+  // Sync geolocation coordinates on load, or apply fallback if location access is unavailable/denied
   useEffect(() => {
     if (coords && !lat && !lng) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
+    } else if (!loadingLocation && !coords && !lat && !lng) {
+      // Fall back to default location if browser location is unavailable
+      setLat(DEFAULT_FALLBACK_LAT);
+      setLng(DEFAULT_FALLBACK_LNG);
     }
-  }, [coords, lat, lng]);
+  }, [coords, loadingLocation, lat, lng]);
 
   const handleMapLocationChange = (newLat: number, newLng: number) => {
     setLat(String(newLat.toFixed(6)));
@@ -89,6 +97,9 @@ export default function ComplaintsPage() {
     if (coords) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
+    } else {
+      setLat(DEFAULT_FALLBACK_LAT);
+      setLng(DEFAULT_FALLBACK_LNG);
     }
   };
 
@@ -331,15 +342,13 @@ export default function ComplaintsPage() {
                     Click/tap on the map to set the exact coordinates of the pollution site
                   </p>
                 </div>
-                {coords && (
-                  <button
-                    type="button"
-                    onClick={handleUseCurrentLocation}
-                    className="text-[10px] text-emerald-650 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded"
-                  >
-                    📍 Reset to My Location
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="text-[10px] text-emerald-650 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded"
+                >
+                  📍 {coords ? "Reset to My Location" : "Reset Location"}
+                </button>
               </div>
 
               {/* Map container */}

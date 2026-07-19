@@ -225,15 +225,11 @@ class ComplaintService:
                 detail=f"Invalid status filter value: {status_filter}"
             )
             
-        # Determine filtering based on user role
-        user_id_filter = None
+        # For citizen panel complaints history, every user (whether citizen or admin)
+        # sees ONLY complaints submitted by themselves.
+        # System-wide administrative overview is served via /api/v1/admin/incidents.
+        user_id_filter = current_user.id
         municipality_id_filter = None
-        
-        if current_user.role == UserRole.CITIZEN.value:
-            user_id_filter = current_user.id
-        elif current_user.role in [UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value]:
-            municipality_id_filter = current_user.municipality_id
-        # super_admin gets all (no filters)
 
         return complaint_repository.list_history(
             db=db,
@@ -718,51 +714,69 @@ def verify_complaint_pipeline(complaint_id: uuid.UUID, raw_files: list, user_id:
         except Exception as e:
             logger.exception(f"[verify_complaint_pipeline] Hotspot refresh failed: {e}")
             
-        # 5. Transition to AI_VALIDATION_COMPLETED
-        complaint.status = ComplaintStatus.AI_VALIDATION_COMPLETED.value
-        complaint.updated_at = datetime.now(timezone.utc)
-        db.add(complaint)
-        db.commit()
-        
-        complaint_service._add_status_history_entry(
-            db, 
-            complaint.id, 
-            ComplaintStatus.AI_VALIDATION_COMPLETED.value, 
-            "AI verification completed successfully", 
-            user_id
-        )
-        complaint_service._dispatch_notification_hook(db, complaint, "AI_VALIDATION_COMPLETED")
-        logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} transitioned to AI_VALIDATION_COMPLETED")
-        
-        # 6. Check auto-forward toggle
-        settings = load_system_settings(db)
-        auto_forward = settings.get("general", {}).get("autoForwardToMunicipality", False)
-        
-        if auto_forward:
-            logger.info(f"[verify_complaint_pipeline] Auto-forward enabled, forwarding complaint={complaint_id}")
-            # Assign a default active municipality if none exists
-            if not complaint.municipality_id:
-                default_mun = db.query(Municipality).filter(Municipality.is_active == True).first()
-                if default_mun:
-                    complaint.municipality_id = default_mun.id
-                    db.add(complaint)
-                    db.commit()
-                    logger.info(f"[verify_complaint_pipeline] Assigned default municipality={default_mun.name} to complaint={complaint_id}")
-            
-            complaint.status = ComplaintStatus.MUNICIPALITY_ACCEPTED.value
+        # 5. Check severity score threshold (< 20% severity score)
+        if complaint.severity_score is not None and complaint.severity_score < 20.0:
+            complaint.status = ComplaintStatus.NO_POLLUTION_DETECTED.value
+            complaint.severity = "normal"
             complaint.updated_at = datetime.now(timezone.utc)
             db.add(complaint)
             db.commit()
             
             complaint_service._add_status_history_entry(
-                db,
-                complaint.id,
-                ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
-                "Complaint automatically forwarded to municipality",
+                db, 
+                complaint.id, 
+                ComplaintStatus.NO_POLLUTION_DETECTED.value, 
+                "No pollution detected (Severity score below 20%)", 
                 user_id
             )
-            complaint_service._dispatch_notification_hook(db, complaint, "MUNICIPALITY_ACCEPTED")
-            logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} auto-forwarded to municipality")
+            complaint_service._dispatch_notification_hook(db, complaint, "NO_POLLUTION_DETECTED")
+            logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} marked as NO_POLLUTION_DETECTED (score={complaint.severity_score})")
+        else:
+            # 6. Standard transition to AI_VALIDATION_COMPLETED for complaints >= 20% severity
+            complaint.status = ComplaintStatus.AI_VALIDATION_COMPLETED.value
+            complaint.updated_at = datetime.now(timezone.utc)
+            db.add(complaint)
+            db.commit()
+            
+            complaint_service._add_status_history_entry(
+                db, 
+                complaint.id, 
+                ComplaintStatus.AI_VALIDATION_COMPLETED.value, 
+                "AI verification completed successfully", 
+                user_id
+            )
+            complaint_service._dispatch_notification_hook(db, complaint, "AI_VALIDATION_COMPLETED")
+            logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} transitioned to AI_VALIDATION_COMPLETED")
+            
+            # 7. Check auto-forward toggle for complaints >= 20% severity
+            settings = load_system_settings(db)
+            auto_forward = settings.get("general", {}).get("autoForwardToMunicipality", False)
+            
+            if auto_forward:
+                logger.info(f"[verify_complaint_pipeline] Auto-forward enabled, forwarding complaint={complaint_id}")
+                # Assign a default active municipality if none exists
+                if not complaint.municipality_id:
+                    default_mun = db.query(Municipality).filter(Municipality.is_active == True).first()
+                    if default_mun:
+                        complaint.municipality_id = default_mun.id
+                        db.add(complaint)
+                        db.commit()
+                        logger.info(f"[verify_complaint_pipeline] Assigned default municipality={default_mun.name} to complaint={complaint_id}")
+                
+                complaint.status = ComplaintStatus.MUNICIPALITY_ACCEPTED.value
+                complaint.updated_at = datetime.now(timezone.utc)
+                db.add(complaint)
+                db.commit()
+                
+                complaint_service._add_status_history_entry(
+                    db,
+                    complaint.id,
+                    ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
+                    "Complaint automatically forwarded to municipality",
+                    user_id
+                )
+                complaint_service._dispatch_notification_hook(db, complaint, "MUNICIPALITY_ACCEPTED")
+                logger.info(f"[verify_complaint_pipeline] Complaint={complaint_id} auto-forwarded to municipality")
             
     except Exception as e:
         logger.exception(f"[verify_complaint_pipeline] Error in background verification: {e}")

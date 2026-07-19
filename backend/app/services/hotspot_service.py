@@ -139,10 +139,12 @@ class HotspotService:
             Complaint.is_deleted == False,
             Complaint.latitude.isnot(None),
             Complaint.longitude.isnot(None),
+            or_(Complaint.severity_score >= 20.0, Complaint.severity_score == None),
             Complaint.status.notin_([
                 ComplaintStatus.REJECTED.value,
                 ComplaintStatus.ARCHIVED.value,
                 ComplaintStatus.RESOLVED.value,
+                ComplaintStatus.NO_POLLUTION_DETECTED.value,
             ]),
         )
         if municipality_id:

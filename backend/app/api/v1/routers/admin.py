@@ -161,15 +161,20 @@ def get_admin_stats(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    total_incidents = db.query(func.count(DBComplaint.id)).filter(DBComplaint.is_deleted == False).scalar() or 0
+    base_filter = [
+        DBComplaint.is_deleted == False,
+        (DBComplaint.severity_score >= 20.0) | (DBComplaint.severity_score == None),
+        DBComplaint.status != "no_pollution_detected"
+    ]
+    total_incidents = db.query(func.count(DBComplaint.id)).filter(*base_filter).scalar() or 0
     resolved_incidents = db.query(func.count(DBComplaint.id)).filter(
         DBComplaint.status == "resolved",
-        DBComplaint.is_deleted == False
+        *base_filter
     ).scalar() or 0
     pending_incidents = db.query(func.count(DBComplaint.id)).filter(
         DBComplaint.status != "resolved",
         DBComplaint.status != "rejected",
-        DBComplaint.is_deleted == False
+        *base_filter
     ).scalar() or 0
     critical_incidents = db.query(func.count(DBComplaint.id)).filter(
         (
@@ -177,7 +182,7 @@ def get_admin_stats(
             | (DBComplaint.severity_score >= 75)
         ),
         DBComplaint.status != "resolved",
-        DBComplaint.is_deleted == False
+        *base_filter
     ).scalar() or 0
 
     total_users = db.query(func.count(DBUser.id)).filter(DBUser.is_deleted == False).scalar() or 0
@@ -320,7 +325,11 @@ def get_admin_incidents(
         joinedload(DBComplaint.user),
         joinedload(DBComplaint.category),
         joinedload(DBComplaint.attachments)
-    ).filter(DBComplaint.is_deleted == False)
+    ).filter(
+        DBComplaint.is_deleted == False,
+        (DBComplaint.severity_score >= 20.0) | (DBComplaint.severity_score == None),
+        DBComplaint.status != "no_pollution_detected"
+    )
     
     if status_filter and status_filter != "all":
         # map frontend status to database status
@@ -357,7 +366,12 @@ def get_admin_incident_by_id(
     db: Session = Depends(get_db),
     current_user: DBUser = Depends(require_admin)
 ):
-    complaint = db.query(DBComplaint).filter(DBComplaint.id == incident_id, DBComplaint.is_deleted == False).first()
+    complaint = db.query(DBComplaint).filter(
+        DBComplaint.id == incident_id,
+        DBComplaint.is_deleted == False,
+        (DBComplaint.severity_score >= 20.0) | (DBComplaint.severity_score == None),
+        DBComplaint.status != "no_pollution_detected"
+    ).first()
     if not complaint:
         raise HTTPException(status_code=456, detail="Incident not found")
     
