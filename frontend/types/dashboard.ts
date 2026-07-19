@@ -94,7 +94,7 @@ export interface StatCardData {
 export interface ReportItem {
   id: string;
   title: string;
-  status: "Under Review" | "Resolved" | "Rejected" | "Approved";
+  status: "Under Review" | "Resolved" | "Rejected" | "Approved" | "No Pollution Detected";
   locationName: string;
   latitude: number;
   longitude: number;
