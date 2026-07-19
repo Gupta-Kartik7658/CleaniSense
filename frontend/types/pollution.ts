@@ -13,6 +13,10 @@ export interface IncidentReport {
   userId: string;
   userName: string;
   userEmail: string;
+  title?: string;
+  shortDescription?: string;
+  assignedOfficer?: string;
+  categoryName?: string;
   type: 'air' | 'land' | 'water' | 'noise';
   severity: 'normal' | 'low' | 'moderate' | 'medium' | 'high' | 'critical';
   severityScore?: number;

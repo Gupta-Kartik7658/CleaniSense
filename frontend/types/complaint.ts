@@ -60,6 +60,8 @@ export interface ComplaintDetailResponse {
   municipality?: MunicipalityResponse;
   timeline: TimelineEventResponse[];
   attachments: AttachmentResponse[];
+  assigned_officer?: string;
+  assignedOfficer?: string;
   resolution?: ResolutionResponse;
 }
 
