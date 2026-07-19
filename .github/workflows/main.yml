@@ -1,0 +1,34 @@
+name: CleaniSense Backend
+run-name: Backend FastAPI CI/CD
+on:
+  push:
+    branches: 
+      - main
+    paths:
+      - "backend/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "backend/**"
+
+jobs:
+  deploy:
+    name: Deploy FastAPI backend
+    runs-on: self-hosted
+    steps: 
+      # 1. Properly pull code and evaluate the path changes
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Run all commands inside the correct server directory using working-directory
+      - name: Pull and Restart Services
+        working-directory: /home/ec2-user/CleaniSense
+        run: |
+          git pull origin main
+          cd backend
+          pip install -r requirements.txt
+          sudo systemctl restart fastapi.service
+          sudo systemctl status fastapi.service --no-pager
+          sudo systemctl restart nginx
+          sudo systemctl status nginx --no-pager
