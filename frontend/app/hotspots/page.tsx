@@ -8,6 +8,8 @@ import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/common/Skeleton";
 import { filterHotspotsForDisplay, filterSinglesByPollutionType, matchesCategoryFilter } from "@/utils/hotspotFilters";
 
+import { useAuth } from "@/providers/AuthProvider";
+
 const ComplaintLeafletMap = dynamic(
   () => import("@/components/dashboard/ComplaintLeafletMap").then((mod) => mod.ComplaintLeafletMap),
   {
@@ -17,6 +19,7 @@ const ComplaintLeafletMap = dynamic(
 );
 
 export default function HotspotsPage() {
+  const { user, loading: authLoading } = useAuth();
   const { coords, loading: loadingLocation } = useCurrentLocation();
   const [hotspots, setHotspots] = useState<any[]>([]);
   const [singles, setSingles] = useState<any[]>([]);
@@ -25,8 +28,9 @@ export default function HotspotsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   useEffect(() => {
+    if (authLoading || !user) return;
     loadSystemHotspots();
-  }, []);
+  }, [user, authLoading]);
 
   const loadSystemHotspots = async () => {
     setLoading(true);

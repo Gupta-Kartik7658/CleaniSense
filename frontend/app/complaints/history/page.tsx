@@ -5,21 +5,24 @@ import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
+import { useAuth } from "@/providers/AuthProvider";
 
 type FilterType = "All" | "Under Review" | "Approved" | "Resolved" | "Rejected";
 
 export default function ComplaintsHistoryPage() {
+  const { user, loading: authLoading } = useAuth();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("All");
 
   const { complaintsData, fetchHistory, loading, error } = useComplaints();
 
-  // Fetch ALL complaints once on mount — client-side filtering handles tabs
+  // Fetch ALL complaints once auth is ready
   useEffect(() => {
+    if (authLoading || !user) return;
     const controller = new AbortController();
     fetchHistory({ page: 1, page_size: 200 }, controller.signal);
     return () => { controller.abort(); };
-  }, [fetchHistory]);
+  }, [user, authLoading, fetchHistory]);
 
   const mapStatus = (status: string, severityScore?: number): "Under Review" | "Resolved" | "Rejected" | "Approved" | "No Pollution Detected" => {
     const lower = (status || "").toLowerCase();

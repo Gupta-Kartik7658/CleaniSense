@@ -30,7 +30,10 @@ import {
   Zap
 } from 'lucide-react';
 
+import { useAuth } from '@/providers/AuthProvider';
+
 export default function AdminDashboard() {
+  const { user, loading: authLoading } = useAuth();
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [hotspotsList, setHotspotsList] = useState<AdminHotspotItem[]>([]);
@@ -52,11 +55,12 @@ export default function AdminDashboard() {
   const [isAssigningOfficer, setIsAssigningOfficer] = useState(false);
 
   useEffect(() => {
+    if (authLoading || !user) return;
     loadDashboardData();
     PollutionService.getOfficers().then((list) => {
       if (Array.isArray(list)) setOfficersList(list);
     }).catch((e) => console.error("Failed to fetch officers list:", e));
-  }, []);
+  }, [user, authLoading]);
 
   const handleAssignOfficer = async (officerName: string) => {
     if (!selectedIncident || !officerName) return;

@@ -9,6 +9,8 @@ import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
+import { useAuth } from "@/providers/AuthProvider";
+
 const LocationSelectorMap = dynamic(
   () => import("@/components/dashboard/LocationSelectorMap"),
   { ssr: false, loading: () => <div className="h-[220px] bg-slate-100 dark:bg-slate-905/30 animate-pulse rounded-xl border border-slate-200 dark:border-slate-800" /> }
@@ -16,6 +18,7 @@ const LocationSelectorMap = dynamic(
 
 export default function ComplaintsPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { coords, loading: loadingLocation } = useCurrentLocation();
   const { createComplaint, loading: submitting, error: submitError } = useComplaints();
 
@@ -45,10 +48,11 @@ export default function ComplaintsPage() {
   // UI state
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // Load config on mount
+  // Load config once auth is ready
   const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading || !user) return;
     const fetchConfig = async () => {
       try {
         setConfigError(null);
@@ -70,7 +74,7 @@ export default function ComplaintsPage() {
       }
     };
     fetchConfig();
-  }, []);
+  }, [user, authLoading]);
 
   // Default fallback coordinates (Mumbai, India)
   const DEFAULT_FALLBACK_LAT = "19.076000";

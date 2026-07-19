@@ -2,6 +2,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/providers/AuthProvider';
 import { complaintService } from '@/services/complaint';
 import { PollutionService } from '@/services/pollutionService';
 import dynamic from 'next/dynamic';
@@ -56,6 +57,7 @@ const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
 };
 
 export default function MediaPage() {
+  const { user, loading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
   const [previewMedia, setPreviewMedia] = useState<any>(null);
@@ -125,11 +127,12 @@ export default function MediaPage() {
   const [isAssigningOfficer, setIsAssigningOfficer] = useState(false);
 
   useEffect(() => {
+    if (authLoading || !user) return;
     loadMediaData();
     PollutionService.getOfficers().then((list) => {
       if (Array.isArray(list)) setOfficersList(list);
     }).catch(err => console.error("Error loading officers list:", err));
-  }, []);
+  }, [user, authLoading]);
 
   // Media Viewer Zoom & Pan States
   const [zoomScale, setZoomScale] = useState(1);
