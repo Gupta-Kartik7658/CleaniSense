@@ -28,11 +28,7 @@ def get_dashboard(
         latitude=latitude,
         longitude=longitude
     )
-    from app.constants.enums import UserRole
-    if current_user.role == UserRole.CITIZEN.value:
-        dashboard_data = DashboardResponse.model_validate(data)
-    else:
-        dashboard_data = MunicipalityDashboardResponse.model_validate(data)
+    dashboard_data = DashboardResponse.model_validate(data)
         
     return standard_response(
         success=True,

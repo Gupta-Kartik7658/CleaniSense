@@ -9,6 +9,8 @@ import { useCurrentLocation } from "@/hooks/useCurrentLocation";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
+import { useAuth } from "@/providers/AuthProvider";
+
 const LocationSelectorMap = dynamic(
   () => import("@/components/dashboard/LocationSelectorMap"),
   { ssr: false, loading: () => <div className="h-[220px] bg-slate-100 dark:bg-slate-905/30 animate-pulse rounded-xl border border-slate-200 dark:border-slate-800" /> }
@@ -16,6 +18,7 @@ const LocationSelectorMap = dynamic(
 
 export default function ComplaintsPage() {
   const router = useRouter();
+  const { user, loading: authLoading } = useAuth();
   const { coords, loading: loadingLocation } = useCurrentLocation();
   const { createComplaint, loading: submitting, error: submitError } = useComplaints();
 
@@ -45,10 +48,11 @@ export default function ComplaintsPage() {
   // UI state
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  // Load config on mount
+  // Load config once auth is ready
   const [configError, setConfigError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authLoading || !user) return;
     const fetchConfig = async () => {
       try {
         setConfigError(null);
@@ -70,15 +74,23 @@ export default function ComplaintsPage() {
       }
     };
     fetchConfig();
-  }, []);
+  }, [user, authLoading]);
 
-  // Sync geolocation coordinates on load
+  // Default fallback coordinates (Mumbai, India)
+  const DEFAULT_FALLBACK_LAT = "19.076000";
+  const DEFAULT_FALLBACK_LNG = "72.877700";
+
+  // Sync geolocation coordinates on load, or apply fallback if location access is unavailable/denied
   useEffect(() => {
-    if (coords && !lat && !lng) {
+    if (coords) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
+    } else if (!loadingLocation && !coords) {
+      // Fall back to default location if browser location is unavailable
+      setLat(DEFAULT_FALLBACK_LAT);
+      setLng(DEFAULT_FALLBACK_LNG);
     }
-  }, [coords, lat, lng]);
+  }, [coords, loadingLocation]);
 
   const handleMapLocationChange = (newLat: number, newLng: number) => {
     setLat(String(newLat.toFixed(6)));
@@ -89,6 +101,9 @@ export default function ComplaintsPage() {
     if (coords) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
+    } else {
+      setLat(DEFAULT_FALLBACK_LAT);
+      setLng(DEFAULT_FALLBACK_LNG);
     }
   };
 
@@ -331,15 +346,13 @@ export default function ComplaintsPage() {
                     Click/tap on the map to set the exact coordinates of the pollution site
                   </p>
                 </div>
-                {coords && (
-                  <button
-                    type="button"
-                    onClick={handleUseCurrentLocation}
-                    className="text-[10px] text-emerald-650 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded"
-                  >
-                    📍 Reset to My Location
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleUseCurrentLocation}
+                  className="text-[10px] text-emerald-650 hover:text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 cursor-pointer bg-emerald-50 dark:bg-emerald-950/20 px-2 py-1 rounded"
+                >
+                  📍 {coords ? "Reset to My Location" : "Reset Location"}
+                </button>
               </div>
 
               {/* Map container */}

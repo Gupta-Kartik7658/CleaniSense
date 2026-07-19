@@ -196,16 +196,21 @@ export function ComplaintLeafletMap({
 }: ComplaintLeafletMapProps) {
   const radiusMeters = mapData?.hotspot_radius_meters ?? 50;
 
+  const validSingles = useMemo(() => {
+    if (!mapData) return [];
+    return mapData.singles.filter((p: any) => p.status !== "no_pollution_detected");
+  }, [mapData]);
+
   const boundsPoints = useMemo<[number, number][]>(() => {
     if (!mapData) return [];
-    const singles = mapData.singles.map(
+    const singles = validSingles.map(
       (p) => [p.latitude, p.longitude] as [number, number]
     );
     const hotspots = mapData.hotspots.map(
       (h) => [h.latitude, h.longitude] as [number, number]
     );
     return [...singles, ...hotspots];
-  }, [mapData]);
+  }, [mapData, validSingles]);
 
   const defaultCenter = useMemo<[number, number]>(() => {
     if (boundsPoints.length > 0) return boundsPoints[0];
@@ -216,7 +221,7 @@ export function ComplaintLeafletMap({
     return <Skeleton className="h-[420px] w-full rounded-2xl" />;
   }
 
-  if (!mapData || mapData.total_complaints === 0) {
+  if (!mapData || (validSingles.length === 0 && mapData.hotspots.length === 0)) {
     return (
       <div className="h-[420px] bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col items-center justify-center text-center p-8">
         <span className="text-4xl mb-3">🗺️</span>
@@ -244,7 +249,7 @@ export function ComplaintLeafletMap({
             OpenStreetMap
           </p>
           <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold">
-            {mapData.total_complaints} report{mapData.total_complaints !== 1 ? "s" : ""} ·{" "}
+            {validSingles.length + mapData.hotspots.length} report marker{validSingles.length + mapData.hotspots.length !== 1 ? "s" : ""} ·{" "}
             {mapData.hotspots.length} hotspot{mapData.hotspots.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -273,7 +278,7 @@ export function ComplaintLeafletMap({
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <FitBounds points={boundsPoints} />
-          {mapData.singles.map((point) => (
+          {validSingles.map((point) => (
             <SingleMarker key={point.id} point={point} />
           ))}
           {mapData.hotspots.map((cluster) => (

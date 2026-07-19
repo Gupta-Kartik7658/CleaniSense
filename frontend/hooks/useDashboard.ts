@@ -46,8 +46,11 @@ export function invalidateDashboardCache() {
 // ---------------------------------------------------------------------------
 // Status mapper (shared)
 // ---------------------------------------------------------------------------
-function mapStatus(status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" {
-  const lower = status.toLowerCase();
+function mapStatus(status: string, severityScore?: number): "Under Review" | "Resolved" | "Rejected" | "Approved" | "No Pollution Detected" {
+  const lower = (status || "").toLowerCase();
+  if (lower === "no_pollution_detected" || (severityScore !== undefined && severityScore !== null && severityScore < 20)) {
+    return "No Pollution Detected";
+  }
   if (lower === "resolved") return "Resolved";
   if (lower === "rejected") return "Rejected";
   if (
@@ -118,7 +121,7 @@ export function useDashboard(userId?: string | null) {
       const mappedReports: ReportItem[] = reportsList.map((r: any) => ({
         id: r.id,
         title: r.title,
-        status: mapStatus(r.status),
+        status: mapStatus(r.status, r.severity_score),
         locationName: r.location_name,
         latitude: r.latitude,
         longitude: r.longitude,

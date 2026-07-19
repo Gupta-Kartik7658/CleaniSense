@@ -5,24 +5,30 @@ import { PortalLayout } from "@/components/dashboard/PortalLayout";
 import { StatusBadge } from "@/components/dashboard/StatusBadge";
 import Link from "next/link";
 import { useComplaints } from "@/hooks/useComplaints";
+import { useAuth } from "@/providers/AuthProvider";
 
 type FilterType = "All" | "Under Review" | "Approved" | "Resolved" | "Rejected";
 
 export default function ComplaintsHistoryPage() {
+  const { user, loading: authLoading } = useAuth();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterType>("All");
 
   const { complaintsData, fetchHistory, loading, error } = useComplaints();
 
-  // Fetch ALL complaints once on mount — client-side filtering handles tabs
+  // Fetch ALL complaints once auth is ready
   useEffect(() => {
+    if (authLoading || !user) return;
     const controller = new AbortController();
     fetchHistory({ page: 1, page_size: 200 }, controller.signal);
     return () => { controller.abort(); };
-  }, [fetchHistory]);
+  }, [user, authLoading, fetchHistory]);
 
-  const mapStatus = (status: string): "Under Review" | "Resolved" | "Rejected" | "Approved" => {
-    const lower = status.toLowerCase();
+  const mapStatus = (status: string, severityScore?: number): "Under Review" | "Resolved" | "Rejected" | "Approved" | "No Pollution Detected" => {
+    const lower = (status || "").toLowerCase();
+    if (lower === "no_pollution_detected" || (severityScore !== undefined && severityScore !== null && severityScore < 20)) {
+      return "No Pollution Detected";
+    }
     if (lower === "resolved") return "Resolved";
     if (lower === "rejected") return "Rejected";
     if (
@@ -32,7 +38,6 @@ export default function ComplaintsHistoryPage() {
       lower === "inspection_completed"
     )
       return "Approved";
-    // submitted, draft, ai_verification_in_progress, ai_validation_completed → Under Review
     return "Under Review";
   };
 
@@ -42,7 +47,7 @@ export default function ComplaintsHistoryPage() {
       (complaintsData?.items ?? []).map((r: any) => ({
         id: r.id,
         title: r.title,
-        status: mapStatus(r.status),
+        status: mapStatus(r.status, r.severity_score),
         rawStatus: r.status,
         description: r.description || "",
         shortDescription: r.short_description || "",
@@ -183,7 +188,7 @@ export default function ComplaintsHistoryPage() {
                     <StatusBadge status={report.status} />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                     <p>
                       <span className="text-slate-400">🏷️</span> Category:{" "}
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
@@ -192,6 +197,12 @@ export default function ComplaintsHistoryPage() {
                     </p>
                     <p>
                       <span className="text-slate-400">📍</span> {report.locationName}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">👮</span> Officer:{" "}
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                        {report.assignedOfficer || "None"}
+                      </span>
                     </p>
                     <p>
                       <span className="text-slate-400">⚠️</span> Severity:{" "}

@@ -167,7 +167,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-slate-150 dark:border-slate-700 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 pt-4 border-t border-slate-150 dark:border-slate-700 text-xs">
                 <div>
                   <span className="text-slate-400 block mb-0.5">Category</span>
                   <span className="font-bold text-slate-800 dark:text-slate-200">
@@ -188,6 +188,14 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 </div>
                 <div>
                   <span className="text-slate-400 block mb-0.5">
+                    Assigned Officer
+                  </span>
+                  <span className="font-bold text-emerald-700 dark:text-emerald-400">
+                    {complaintDetail.assigned_officer || resolutionDetail?.officer_name || "None"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block mb-0.5">
                     GPS Coordinates
                   </span>
                   <span className="font-mono text-slate-600 dark:text-slate-350">
@@ -196,6 +204,41 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 </div>
               </div>
             </div>
+
+            {/* Full Complaint Description Card */}
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-2 text-left">
+              <h3 className="text-xs font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                Full Complaint Description
+              </h3>
+              <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium whitespace-pre-wrap">
+                {complaintDetail.description || complaintDetail.title || "No description provided."}
+              </p>
+            </div>
+
+            {/* Submitted Photo / Video Evidence Card */}
+            {complaintDetail.attachments && complaintDetail.attachments.length > 0 && (
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3 text-left">
+                <h3 className="text-xs font-extrabold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                  Submitted Photo / Video Evidence ({complaintDetail.attachments.length})
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-1">
+                  {complaintDetail.attachments.map((att: any) => {
+                    const isVideo = att.file_type?.startsWith("video") || att.public_url?.match(/\.(mp4|webm|mov)$/i);
+                    return (
+                      <div key={att.id} className="relative aspect-video rounded-xl overflow-hidden bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xs group">
+                        {isVideo ? (
+                          <video src={att.public_url} controls className="w-full h-full object-contain" />
+                        ) : (
+                          <a href={att.public_url} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                            <img src={att.public_url} alt="Submitted photo evidence" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Visual Lifecycle Timeline */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-6">
