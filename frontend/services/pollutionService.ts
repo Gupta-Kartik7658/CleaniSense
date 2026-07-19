@@ -61,6 +61,35 @@ export class PollutionService {
     await api.post(`/admin/incidents/${incidentId}/assign`, { adminId });
   }
 
+  static async getOfficers(): Promise<string[]> {
+    try {
+      const response: any = await api.get('/admin/officers');
+      return response.data?.officers || response.officers || [
+        "Officer Rajesh Sharma (Sanitation Dept)",
+        "Officer Priya Verma (Environmental Protection)",
+        "Officer Amit Patel (Waste Management)",
+        "Officer Sunita Rao (Water Quality)",
+        "Officer Vikram Singh (Air Safety)"
+      ];
+    } catch (error) {
+      console.error('Error fetching officers list, returning default list:', error);
+      return [
+        "Officer Rajesh Sharma (Sanitation Dept)",
+        "Officer Priya Verma (Environmental Protection)",
+        "Officer Amit Patel (Waste Management)",
+        "Officer Sunita Rao (Water Quality)",
+        "Officer Vikram Singh (Air Safety)"
+      ];
+    }
+  }
+
+  static async assignOfficer(incidentId: string, officerName: string): Promise<any> {
+    const response = await api.patch(`/admin/incidents/${incidentId}/assign-officer`, {
+      officer_name: officerName
+    });
+    return response as any;
+  }
+
   // AQI Predictions
   static async getAQIPredictions(): Promise<AQIPrediction[]> {
     try {

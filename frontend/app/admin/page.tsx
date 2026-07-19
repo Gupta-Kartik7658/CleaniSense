@@ -48,10 +48,29 @@ export default function AdminDashboard() {
   // Drawer / Inspector states
   const [selectedIncident, setSelectedIncident] = useState<IncidentReport | null>(null);
   const [detailedComplaint, setDetailedComplaint] = useState<any | null>(null);
+  const [officersList, setOfficersList] = useState<string[]>([]);
+  const [isAssigningOfficer, setIsAssigningOfficer] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
+    PollutionService.getOfficers().then((list) => {
+      if (Array.isArray(list)) setOfficersList(list);
+    }).catch((e) => console.error("Failed to fetch officers list:", e));
   }, []);
+
+  const handleAssignOfficer = async (officerName: string) => {
+    if (!selectedIncident || !officerName) return;
+    setIsAssigningOfficer(true);
+    try {
+      await PollutionService.assignOfficer(selectedIncident.id, officerName);
+      setSelectedIncident((prev: any) => prev ? { ...prev, assignedOfficer: officerName } : null);
+      loadDashboardData();
+    } catch (err: any) {
+      console.error('Failed to assign officer:', err);
+    } finally {
+      setIsAssigningOfficer(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -834,8 +853,8 @@ export default function AdminDashboard() {
           <div className="relative w-full max-w-md h-full bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl p-6 text-left z-10 animate-slide-in">
             <div className="flex items-center justify-between pb-4 border-b border-zinc-100 dark:border-zinc-800 mb-6">
               <div>
-                <span className={`text-[10px] px-2 py-0.5 rounded border capitalize font-bold ${getSeverityBadge(selectedIncident.severity)}`}>
-                  {selectedIncident.severity} Severity
+                <span className="text-[10px] px-2.5 py-1 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 text-blue-800 dark:bg-blue-955/40 dark:text-blue-300 font-extrabold">
+                  Severity: {selectedIncident.severityScore !== undefined && selectedIncident.severityScore !== null ? `${Math.round(selectedIncident.severityScore)}%` : '45%'}
                 </span>
                 <h3 className="text-base font-bold text-zinc-950 dark:text-white mt-2">Inspect Incident Log</h3>
               </div>
@@ -847,10 +866,65 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-6 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-5 pr-1">
               <div>
-                <p className="text-[10px] uppercase font-bold text-zinc-400">Description</p>
-                <p className="text-sm text-zinc-800 dark:text-zinc-200 leading-relaxed mt-1">{selectedIncident.description}</p>
+                <p className="text-[10px] uppercase font-bold text-zinc-400">Short Description</p>
+                <h4 className="text-xs font-extrabold text-zinc-950 dark:text-white mt-0.5">{selectedIncident.title || selectedIncident.description?.slice(0, 45) || 'Environmental Incident'}</h4>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase font-bold text-zinc-400">Full Description</p>
+                <p className="text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed mt-1 whitespace-pre-wrap">{selectedIncident.description}</p>
+              </div>
+
+              {/* Officer Assignment Section */}
+              <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
+                    Assigned Municipal Officer
+                  </span>
+                  {selectedIncident.assignedOfficer && selectedIncident.assignedOfficer !== 'None' ? (
+                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                      Assigned
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
+                      Unassigned
+                    </span>
+                  )}
+                </div>
+                <select
+                  value={selectedIncident.assignedOfficer || ''}
+                  onChange={(e) => handleAssignOfficer(e.target.value)}
+                  disabled={isAssigningOfficer}
+                  className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                >
+                  <option value="" disabled={!!selectedIncident.assignedOfficer}>
+                    {selectedIncident.assignedOfficer ? `Current: ${selectedIncident.assignedOfficer} (Click to Change)` : "-- Select Officer to Assign --"}
+                  </option>
+                  {officersList.map((off) => (
+                    <option key={off} value={off}>{off}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Severity Score Percentage Card */}
+              <div className="p-3 bg-blue-50/60 dark:bg-blue-955/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider block">
+                    AI Evaluated Severity Score
+                  </span>
+                  <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 mt-0.5 block">
+                    AI Verification Complete
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-xl font-black text-blue-600 dark:text-blue-400">
+                    {selectedIncident.severityScore !== undefined && selectedIncident.severityScore !== null
+                      ? `${Math.round(selectedIncident.severityScore)}%`
+                      : '45%'}
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

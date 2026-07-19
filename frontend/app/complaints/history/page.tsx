@@ -185,7 +185,7 @@ export default function ComplaintsHistoryPage() {
                     <StatusBadge status={report.status} />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-4 gap-y-1.5 text-[11px] text-slate-500 dark:text-slate-400">
                     <p>
                       <span className="text-slate-400">🏷️</span> Category:{" "}
                       <span className="font-semibold text-slate-700 dark:text-slate-300">
@@ -194,6 +194,12 @@ export default function ComplaintsHistoryPage() {
                     </p>
                     <p>
                       <span className="text-slate-400">📍</span> {report.locationName}
+                    </p>
+                    <p>
+                      <span className="text-slate-400">👮</span> Officer:{" "}
+                      <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                        {report.assignedOfficer || "None"}
+                      </span>
                     </p>
                     <p>
                       <span className="text-slate-400">⚠️</span> Severity:{" "}

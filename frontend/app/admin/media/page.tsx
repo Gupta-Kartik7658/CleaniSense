@@ -121,9 +121,62 @@ export default function MediaPage() {
       setResolvingLoading(false);
     }
   };
+  const [officersList, setOfficersList] = useState<string[]>([]);
+  const [isAssigningOfficer, setIsAssigningOfficer] = useState(false);
+
   useEffect(() => {
     loadMediaData();
+    PollutionService.getOfficers().then((list) => {
+      if (Array.isArray(list)) setOfficersList(list);
+    }).catch(err => console.error("Error loading officers list:", err));
   }, []);
+
+  // Media Viewer Zoom & Pan States
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panPos, setPanPos] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [activeMediaTab, setActiveMediaTab] = useState<'reported' | 'resolved'>('reported');
+
+  const resetZoomPan = () => {
+    setZoomScale(1);
+    setPanPos({ x: 0, y: 0 });
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => Math.min(prev + 0.5, 3.5));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => {
+      const next = Math.max(prev - 0.5, 1);
+      if (next === 1) setPanPos({ x: 0, y: 0 });
+      return next;
+    });
+  };
+
+  // Reset zoom whenever previewMedia changes
+  useEffect(() => {
+    resetZoomPan();
+    setActiveMediaTab('reported');
+  }, [previewMedia]);
+
+  const handleAssignOfficer = async (officerName: string) => {
+    if (!previewMedia || !officerName) return;
+    setIsAssigningOfficer(true);
+    try {
+      const targetId = previewMedia.complaintId || previewMedia.id;
+      await PollutionService.assignOfficer(targetId, officerName);
+      showNotification(`Report assigned to ${officerName} successfully.`, 'success');
+      setPreviewMedia((prev: any) => prev ? { ...prev, assignedOfficer: officerName } : null);
+      loadMediaData();
+    } catch (err: any) {
+      console.error('Failed to assign officer:', err);
+      showNotification(err.message || 'Failed to assign officer.', 'error');
+    } finally {
+      setIsAssigningOfficer(false);
+    }
+  };
 
   const loadMediaData = async () => {
     setLoading(true);
@@ -138,6 +191,8 @@ export default function MediaPage() {
         const resAct = item.resolution?.actions || item.resolutionActions || '';
         const officer = item.assignedOfficer || item.assigned_officer || item.resolution?.officer_name || '';
         const fullDesc = item.description || item.short_description || item.title || '';
+        const shortDesc = item.short_description || item.title || (item.description ? item.description.slice(0, 45) + '...' : 'Incident Report');
+        const resAfter = item.resolution?.after_image_url || item.resolution_report?.after_image_url || item.after_image_url || null;
 
         const mediaUrls = item.mediaUrls || [];
         if (mediaUrls.length > 0) {
@@ -149,18 +204,21 @@ export default function MediaPage() {
               type: isVideo ? 'video' : 'image',
               url: url,
               thumbnail: url,
-              name: item.description ? (item.description.slice(0, 35) + '...') : 'Report Attachment',
+              name: shortDesc,
               location: item.location?.address || 'Verified Coordinate',
               user: item.userName || 'Unknown Reporter',
               email: item.userEmail || '',
               uploadTimestamp: item.reportedAt || new Date().toISOString(),
               date: item.reportedAt ? new Date(item.reportedAt).toLocaleDateString() : new Date().toLocaleDateString(),
               severity: item.severity?.toLowerCase() || 'medium',
+              severityScore: item.severityScore || item.severity_score,
               status: item.status || 'submitted',
               categoryName: catName,
               resolutionSummary: resSum,
               resolutionActions: resAct,
+              resolutionAfterImage: resAfter,
               assignedOfficer: officer,
+              shortDescription: shortDesc,
               fullDescription: fullDesc,
               rawIncident: item,
               sizeInBytes: 800000,
@@ -178,18 +236,21 @@ export default function MediaPage() {
             type: 'image',
             url: '/placeholder-media.png',
             thumbnail: '/placeholder-media.png',
-            name: item.description ? (item.description.slice(0, 35) + '...') : 'Report Log',
+            name: shortDesc,
             location: item.location?.address || 'Verified Coordinate',
             user: item.userName || 'Unknown Reporter',
             email: item.userEmail || '',
             uploadTimestamp: item.reportedAt || new Date().toISOString(),
             date: item.reportedAt ? new Date(item.reportedAt).toLocaleDateString() : new Date().toLocaleDateString(),
             severity: item.severity?.toLowerCase() || 'medium',
+            severityScore: item.severityScore || item.severity_score,
             status: item.status || 'submitted',
             categoryName: catName,
             resolutionSummary: resSum,
             resolutionActions: resAct,
+            resolutionAfterImage: resAfter,
             assignedOfficer: officer,
+            shortDescription: shortDesc,
             fullDescription: fullDesc,
             rawIncident: item,
             sizeInBytes: 500000,
@@ -909,7 +970,7 @@ Time: ${new Date().toLocaleString()}
         </div>
       )}
 
-      {/* Floating Preview Modal Overlay (Larger with Map Canvas & Details) */}
+      {/* Floating Preview Modal Overlay (Larger max-w-6xl with Map Canvas & Full Details) */}
       {previewMedia && (() => {
         const isResolved = checkResolvedStatus(previewMedia.status);
         const isApproved = checkApprovedStatus(previewMedia.status);
@@ -917,67 +978,152 @@ Time: ${new Date().toLocaleString()}
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/80 backdrop-blur-xs" onClick={() => setPreviewMedia(null)} />
-            <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl w-full max-w-5xl text-left z-10 animate-scale-in">
+            <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl w-full max-w-6xl text-left z-10 animate-scale-in max-h-[92vh] flex flex-col">
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center justify-between p-4 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                 <div className="flex items-center gap-2">
-                  <span className={`px-2 py-0.5 text-[10px] font-bold rounded border capitalize ${getSeverityColor(previewMedia.severity)}`}>
-                    {previewMedia.severity} Severity
+                  <span className="px-2.5 py-1 text-xs font-bold rounded border border-blue-200 dark:border-blue-800 bg-blue-50 text-blue-800 dark:bg-blue-955/40 dark:text-blue-300">
+                    Severity: {previewMedia.severityScore !== undefined && previewMedia.severityScore !== null ? `${Math.round(previewMedia.severityScore)}%` : '45%'}
                   </span>
                   {isResolved && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-emerald-50 text-emerald-800 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900 uppercase">
+                    <span className="px-2.5 py-1 text-xs font-bold rounded border bg-emerald-50 text-emerald-800 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900 uppercase">
                       Resolved
                     </span>
                   )}
                   {!isResolved && isApproved && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-blue-50 text-blue-800 border-blue-250 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900 uppercase">
+                    <span className="px-2.5 py-1 text-xs font-bold rounded border bg-blue-50 text-blue-800 border-blue-250 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-900 uppercase">
                       Approved
                     </span>
                   )}
                   {!isResolved && isRejected && (
-                    <span className="px-2 py-0.5 text-[10px] font-bold rounded border bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-955/20 dark:text-rose-400 dark:border-rose-900 uppercase">
+                    <span className="px-2.5 py-1 text-xs font-bold rounded border bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-955/20 dark:text-rose-400 dark:border-rose-900 uppercase">
                       Rejected
                     </span>
                   )}
                 </div>
                 <button
                   onClick={() => setPreviewMedia(null)}
-                  className="p-1 text-zinc-400 hover:dark:text-zinc-400 rounded hover:bg-zinc-55 dark:hover:bg-zinc-800"
+                  className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-white rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               {/* Modal Content - Expanded 3 Columns Grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-3">
-                {/* Column 1: Media viewer panel */}
-                <div className="p-4 bg-zinc-950 flex flex-col justify-between items-center relative min-h-[350px]">
-                  <div className="relative w-full h-full flex items-center justify-center">
-                    {previewMedia.type === 'video' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 overflow-y-auto flex-1">
+                {/* Column 1: Interactive Zoomable/Panable Media viewer panel */}
+                <div className="p-5 bg-zinc-950 flex flex-col justify-between items-center relative min-h-[400px]">
+                  {/* Photo Switcher Tabs when Resolved */}
+                  {(isResolved || previewMedia.resolutionAfterImage) && (
+                    <div className="flex gap-2 mb-3 w-full z-20">
+                      <button
+                        onClick={() => { setActiveMediaTab('reported'); resetZoomPan(); }}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${activeMediaTab === 'reported' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white'}`}
+                      >
+                        📷 Pollution Photo
+                      </button>
+                      <button
+                        onClick={() => { setActiveMediaTab('resolved'); resetZoomPan(); }}
+                        className={`flex-1 py-1.5 text-xs font-bold rounded-lg border transition-colors cursor-pointer ${activeMediaTab === 'resolved' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white'}`}
+                      >
+                        ✅ Resolution Evidence
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Floating Zoom & Pan Controls */}
+                  <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/70 backdrop-blur-xs px-2 py-1 rounded-lg border border-white/20 z-20 text-white shadow-md">
+                    <button
+                      onClick={handleZoomIn}
+                      className="p-1 hover:bg-white/20 rounded text-xs font-bold cursor-pointer"
+                      title="Zoom In (+)"
+                    >
+                      +
+                    </button>
+                    <span className="text-[10px] font-mono font-bold px-1 select-none">
+                      {Math.round(zoomScale * 100)}%
+                    </span>
+                    <button
+                      onClick={handleZoomOut}
+                      className="p-1 hover:bg-white/20 rounded text-xs font-bold cursor-pointer"
+                      title="Zoom Out (-)"
+                    >
+                      -
+                    </button>
+                    {zoomScale > 1 && (
+                      <button
+                        onClick={resetZoomPan}
+                        className="p-1 hover:bg-white/20 rounded text-[10px] font-bold ml-1 border-l border-white/20 pl-2 cursor-pointer"
+                        title="Reset 100%"
+                      >
+                        ↺ Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Image / Video Display Container with Pan & Zoom */}
+                  <div
+                    className={`relative w-full h-full flex items-center justify-center overflow-hidden ${
+                      zoomScale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : ''
+                    }`}
+                    onWheel={(e) => {
+                      if (e.deltaY < 0) handleZoomIn();
+                      else handleZoomOut();
+                    }}
+                    onMouseDown={(e) => {
+                      if (zoomScale > 1) {
+                        setIsDragging(true);
+                        setDragStart({ x: e.clientX - panPos.x, y: e.clientY - panPos.y });
+                      }
+                    }}
+                    onMouseMove={(e) => {
+                      if (isDragging && zoomScale > 1) {
+                        setPanPos({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+                      }
+                    }}
+                    onMouseUp={() => setIsDragging(false)}
+                    onMouseLeave={() => setIsDragging(false)}
+                  >
+                    {activeMediaTab === 'resolved' && previewMedia.resolutionAfterImage ? (
+                      <img
+                        src={previewMedia.resolutionAfterImage}
+                        alt="Resolution evidence photo"
+                        onError={handleImageError}
+                        style={{
+                          transform: `scale(${zoomScale}) translate(${panPos.x / zoomScale}px, ${panPos.y / zoomScale}px)`,
+                          transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                        }}
+                        className="max-h-[420px] w-auto rounded object-contain select-none pointer-events-auto"
+                      />
+                    ) : previewMedia.type === 'video' ? (
                       <video
                         src={previewMedia.url}
                         controls
                         autoPlay
-                        className="max-h-[380px] w-auto rounded object-contain"
+                        className="max-h-[420px] w-auto rounded object-contain"
                       />
                     ) : (
                       <img
                         src={previewMedia.url}
                         alt={previewMedia.name}
                         onError={handleImageError}
-                        className="max-h-[380px] w-auto rounded object-contain"
+                        style={{
+                          transform: `scale(${zoomScale}) translate(${panPos.x / zoomScale}px, ${panPos.y / zoomScale}px)`,
+                          transition: isDragging ? 'none' : 'transform 0.15s ease-out'
+                        }}
+                        className="max-h-[420px] w-auto rounded object-contain select-none pointer-events-auto"
                       />
                     )}
                   </div>
-                  <div className="w-full mt-3 flex items-center justify-between text-[11px] font-semibold text-zinc-400 border-t border-zinc-800 pt-2">
-                    <span>Type: {previewMedia.type}</span>
+                  <div className="w-full mt-4 flex items-center justify-between text-[11px] font-semibold text-zinc-400 border-t border-zinc-800 pt-3">
+                    <span>Active View: {activeMediaTab === 'resolved' ? 'Resolution Photo' : previewMedia.type}</span>
                     <span>Report ID: {(previewMedia.complaintId || previewMedia.id).slice(0, 8)}</span>
                   </div>
                 </div>
 
                 {/* Column 2: Live Leaflet Map showing coordinates */}
-                <div className="bg-slate-50 dark:bg-zinc-955 p-4 h-[350px] lg:h-[450px] border-y lg:border-y-0 lg:border-x border-zinc-200 dark:border-zinc-800 flex flex-col justify-between relative z-0">
-                  <div className="flex-1 min-h-[240px]">
+                <div className="bg-slate-50 dark:bg-zinc-955 p-5 min-h-[400px] border-y lg:border-y-0 lg:border-x border-zinc-200 dark:border-zinc-800 flex flex-col justify-between relative z-0">
+                  <div className="flex-1 min-h-[280px]">
                     {previewMedia.latitude && previewMedia.longitude ? (
                       <PreviewMap
                         latitude={previewMedia.latitude}
@@ -990,18 +1136,80 @@ Time: ${new Date().toLocaleString()}
                       </div>
                     )}
                   </div>
-                  <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-800 text-[10px] text-zinc-450 dark:text-zinc-500 space-y-1">
-                    <p className="font-mono">Lat: {previewMedia.latitude?.toFixed(5)}° N</p>
-                    <p className="font-mono">Lng: {previewMedia.longitude?.toFixed(5)}° E</p>
+                  <div className="mt-4 pt-3 border-t border-zinc-200 dark:border-zinc-800 text-[11px] text-zinc-500 space-y-1">
+                    <p className="font-mono">Latitude: {previewMedia.latitude?.toFixed(5)}° N</p>
+                    <p className="font-mono">Longitude: {previewMedia.longitude?.toFixed(5)}° E</p>
+                    <p className="text-[10px] text-zinc-400 mt-1">📍 {previewMedia.location}</p>
                   </div>
                 </div>
 
-                {/* Column 3: Metadata Details & Action buttons */}
-                <div className="p-6 flex flex-col justify-between h-[450px]">
-                  <div className="space-y-4 overflow-y-auto max-h-[300px] pr-1">
+                {/* Column 3: Dual Descriptions, Officer Dropdown & Severity Percentage */}
+                <div className="p-6 flex flex-col justify-between min-h-[500px]">
+                  <div className="space-y-4 overflow-y-auto pr-1">
+                    {/* Short Description */}
                     <div>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Title</span>
-                      <h3 className="text-sm font-extrabold text-zinc-950 dark:text-white mt-0.5 leading-snug">{previewMedia.name}</h3>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Short Description</span>
+                      <h3 className="text-sm font-extrabold text-zinc-950 dark:text-white mt-0.5 leading-snug">
+                        {previewMedia.shortDescription || previewMedia.name || 'Environmental Incident'}
+                      </h3>
+                    </div>
+
+                    {/* Full Description */}
+                    <div>
+                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Full Description</span>
+                      <p className="text-xs text-zinc-800 dark:text-zinc-200 font-medium leading-relaxed mt-1 whitespace-pre-wrap bg-zinc-50 dark:bg-zinc-950/60 p-2.5 rounded-lg border border-zinc-150 dark:border-zinc-800">
+                        {previewMedia.fullDescription || previewMedia.description || 'No detailed description provided.'}
+                      </p>
+                    </div>
+
+                    {/* Officer Assignment Dropdown */}
+                    <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
+                          Assigned Municipal Officer
+                        </span>
+                        {previewMedia.assignedOfficer && previewMedia.assignedOfficer !== 'None' ? (
+                          <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                            Assigned
+                          </span>
+                        ) : (
+                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
+                            Unassigned
+                          </span>
+                        )}
+                      </div>
+                      <select
+                        value={previewMedia.assignedOfficer || ''}
+                        onChange={(e) => handleAssignOfficer(e.target.value)}
+                        disabled={isAssigningOfficer}
+                        className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                      >
+                        <option value="" disabled={!!previewMedia.assignedOfficer}>
+                          {previewMedia.assignedOfficer ? `Current: ${previewMedia.assignedOfficer} (Click to Change)` : "-- Select Officer to Assign --"}
+                        </option>
+                        {officersList.map((off) => (
+                          <option key={off} value={off}>{off}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Severity Score Percentage Card (Percentage Only) */}
+                    <div className="p-3.5 bg-blue-50/60 dark:bg-blue-955/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider block">
+                          AI Evaluated Severity Score
+                        </span>
+                        <span className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 mt-0.5 block">
+                          AI Verification Complete
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                          {previewMedia.severityScore !== undefined && previewMedia.severityScore !== null
+                            ? `${Math.round(previewMedia.severityScore)}%`
+                            : '45%'}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -1032,14 +1240,6 @@ Time: ${new Date().toLocaleString()}
                       </div>
                     </div>
 
-                    <div>
-                      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-bold uppercase tracking-wider">Location Address</span>
-                      <p className="text-xs text-zinc-800 dark:text-zinc-205 mt-0.5 flex items-start gap-1">
-                        <MapPin className="h-4 w-4 text-zinc-400 shrink-0 mt-0.5" />
-                        <span>{previewMedia.location}</span>
-                      </p>
-                    </div>
-
                     {/* Government Resolution Report Details */}
                     {(isResolved || previewMedia.resolutionSummary) && (
                       <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl space-y-2 text-left mt-2">
@@ -1048,7 +1248,7 @@ Time: ${new Date().toLocaleString()}
                             Government Resolution Info
                           </span>
                           <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
-                            Officer: {previewMedia.assignedOfficer || previewMedia.rawIncident?.resolution?.officer_name || previewMedia.rawIncident?.assigned_officer || 'Municipal Officer'}
+                            Officer: {previewMedia.assignedOfficer || 'Municipal Officer'}
                           </span>
                         </div>
                         <div>

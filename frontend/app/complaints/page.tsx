@@ -78,15 +78,15 @@ export default function ComplaintsPage() {
 
   // Sync geolocation coordinates on load, or apply fallback if location access is unavailable/denied
   useEffect(() => {
-    if (coords && !lat && !lng) {
+    if (coords) {
       setLat(String(coords.latitude.toFixed(6)));
       setLng(String(coords.longitude.toFixed(6)));
-    } else if (!loadingLocation && !coords && !lat && !lng) {
+    } else if (!loadingLocation && !coords) {
       // Fall back to default location if browser location is unavailable
       setLat(DEFAULT_FALLBACK_LAT);
       setLng(DEFAULT_FALLBACK_LNG);
     }
-  }, [coords, loadingLocation, lat, lng]);
+  }, [coords, loadingLocation]);
 
   const handleMapLocationChange = (newLat: number, newLng: number) => {
     setLat(String(newLat.toFixed(6)));

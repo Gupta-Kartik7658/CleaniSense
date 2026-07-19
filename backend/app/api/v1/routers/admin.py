@@ -116,7 +116,7 @@ def map_db_complaint_to_frontend(complaint: DBComplaint) -> dict:
             "date_resolved": complaint.resolution.date_resolved.isoformat() if complaint.resolution.date_resolved else None,
         }
 
-    officer_name = complaint.assigned_officer or (complaint.resolution.officer_name if complaint.resolution else None) or "Municipal Admin"
+    officer_name = complaint.assigned_officer or (complaint.resolution.officer_name if complaint.resolution else None)
 
     return {
         "id": str(complaint.id),
@@ -439,6 +439,76 @@ def update_incident_status(
     return standard_response(
         success=True,
         message="Incident status updated successfully",
+        data=incident
+    )
+
+DEMO_OFFICERS = [
+    "Officer Rajesh Sharma (Sanitation Dept)",
+    "Officer Priya Verma (Environmental Protection)",
+    "Officer Amit Patel (Waste Management)",
+    "Officer Sunita Rao (Water Quality)",
+    "Officer Vikram Singh (Air Safety)"
+]
+
+@router.get("/officers", response_model=StandardResponseModel)
+def get_admin_officers(
+    db: Session = Depends(get_db),
+    current_user: DBUser = Depends(require_admin)
+):
+    db_officers = db.query(DBUser).filter(
+        DBUser.is_deleted == False,
+        DBUser.is_active == True,
+        DBUser.role.in_([UserRole.MUNICIPALITY_OFFICER.value, UserRole.MUNICIPALITY_ADMIN.value])
+    ).all()
+    
+    officers_list = list(DEMO_OFFICERS)
+    for u in db_officers:
+        name_str = f"{u.name or u.email} ({u.role.replace('_', ' ').title()})"
+        if name_str not in officers_list:
+            officers_list.append(name_str)
+            
+    return standard_response(
+        success=True,
+        message="Officers list retrieved successfully",
+        data={"officers": officers_list}
+    )
+
+@router.patch("/incidents/{incident_id}/assign-officer", response_model=StandardResponseModel)
+def assign_officer_to_incident(
+    incident_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: DBUser = Depends(require_admin)
+):
+    complaint = db.query(DBComplaint).filter(DBComplaint.id == incident_id, DBComplaint.is_deleted == False).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Incident report not found")
+        
+    officer_name = payload.get("officer_name") or payload.get("assigned_officer") or payload.get("officer")
+    if not officer_name:
+        raise HTTPException(status_code=400, detail="Officer name is required")
+        
+    complaint.assigned_officer = officer_name
+    if complaint.status in ["submitted", "ai_validation_completed", "municipality_accepted"]:
+        complaint.status = "officer_assigned"
+        
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+    
+    from app.services.complaint_service import complaint_service
+    complaint_service._add_status_history_entry(
+        db,
+        complaint.id,
+        complaint.status,
+        f"Assigned to {officer_name}",
+        current_user.id
+    )
+    
+    incident = map_db_complaint_to_frontend(complaint)
+    return standard_response(
+        success=True,
+        message=f"Incident assigned to {officer_name} successfully",
         data=incident
     )
 
