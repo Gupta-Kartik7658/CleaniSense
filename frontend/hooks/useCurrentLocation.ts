@@ -39,7 +39,7 @@ export function useCurrentLocation() {
         },
         {
           enableHighAccuracy: highAccuracy,
-          timeout: highAccuracy ? 5000 : 7000,
+          timeout: 10000, // 10 seconds for mobile GPS fixes
           maximumAge: 0 // Always fetch fresh position
         }
       );
