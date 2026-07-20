@@ -124,11 +124,17 @@ export default function ComplaintsPage() {
     // Validate size and type for each file
     for (const file of filesArray) {
       const fType = (file.type || "").toLowerCase();
-      const isAllowed = allowedTypes.some(t => t.toLowerCase() === fType) ||
+      const fName = (file.name || "").toLowerCase();
+      const extAllowed = /\.(jpg|jpeg|png|webp|heic|heif|gif|pdf)$/i.test(fName);
+      const isAllowed =
+        !fType || // Mobile camera uploads may omit fType in some browser environments
         fType.startsWith("image/") ||
-        fType === "application/pdf";
+        fType === "application/pdf" ||
+        allowedTypes.some((t) => t.toLowerCase() === fType) ||
+        extAllowed;
+
       if (!isAllowed) {
-        setFileErrors(`Unsupported file format: ${file.name}. Only Image (JPEG, PNG, WebP) and PDF files are allowed.`);
+        setFileErrors(`Unsupported file format: ${file.name}. Only Image files (JPEG, PNG, WebP, HEIC) and PDFs are allowed.`);
         return;
       }
       if (file.size > maxUploadSizeMb * 1024 * 1024) {
@@ -415,7 +421,7 @@ export default function ComplaintsPage() {
                   multiple
                   onChange={handleFileChange}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  accept="image/jpeg,image/png,application/pdf"
+                  accept="image/*,application/pdf"
                 />
                 <span className="text-2xl block mb-1">📸</span>
                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">

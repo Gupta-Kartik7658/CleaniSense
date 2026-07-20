@@ -85,6 +85,68 @@ export default function MediaPage() {
   const [resolveFile, setResolveFile] = useState<File | null>(null);
   const [resolvingLoading, setResolvingLoading] = useState(false);
 
+  // One-Step Approval & Officer Assignment Modal States
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveTargetItem, setApproveTargetItem] = useState<any>(null);
+  const [selectedApproveOfficer, setSelectedApproveOfficer] = useState("");
+  const [approvingLoading, setApprovingLoading] = useState(false);
+
+  const handleApproveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!approveTargetItem) return;
+    if (!selectedApproveOfficer) {
+      showNotification('Please select a field officer to complete approval.', 'error');
+      return;
+    }
+
+    setApprovingLoading(true);
+    try {
+      const targetId = approveTargetItem.complaintId || approveTargetItem.id;
+      
+      // Execute approval and officer assignment sequentially
+      await PollutionService.updateIncidentStatus(targetId, 'approved');
+      await PollutionService.assignOfficer(targetId, selectedApproveOfficer);
+
+      showNotification(`Report approved and assigned to ${selectedApproveOfficer} successfully.`, 'success');
+      setShowApproveModal(false);
+
+      const updatedOfficer = selectedApproveOfficer;
+      setApproveTargetItem(null);
+      setSelectedApproveOfficer("");
+
+      // Update previewMedia in-place if active without closing preview drawer
+      setPreviewMedia((prev: any) => {
+        if (prev && (prev.id === approveTargetItem.id || prev.complaintId === targetId)) {
+          return {
+            ...prev,
+            status: 'officer_assigned',
+            assignedOfficer: updatedOfficer
+          };
+        }
+        return prev;
+      });
+
+      // Update mediaList in-place without page reload
+      setMediaList((prevList) => prevList.map((m) => {
+        if (m.id === approveTargetItem.id || m.complaintId === targetId) {
+          return {
+            ...m,
+            status: 'officer_assigned',
+            assignedOfficer: updatedOfficer
+          };
+        }
+        return m;
+      }));
+
+      loadMediaData();
+    } catch (err: any) {
+      console.error('Failed to complete report approval & officer assignment:', err);
+      showNotification(err.message || 'Failed to approve report and assign officer.', 'error');
+    } finally {
+      setApprovingLoading(false);
+    }
+  };
+
   const handleResolveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!previewMedia) return;
@@ -349,21 +411,26 @@ export default function MediaPage() {
   };
 
   const handleSingleAction = async (id: string, action: 'approve' | 'reject' | 'delete') => {
-    const item = mediaList.find((m) => m.id === id);
+    const item = mediaList.find((m) => m.id === id) || (previewMedia && (previewMedia.id === id || previewMedia.complaintId === id) ? previewMedia : null);
     if (!item) return;
 
+    if (action === 'approve') {
+      setApproveTargetItem(item);
+      setSelectedApproveOfficer(item.assignedOfficer && item.assignedOfficer !== 'None' ? item.assignedOfficer : '');
+      setShowApproveModal(true);
+      return;
+    }
+
     try {
-      if (action === 'approve') {
-        await PollutionService.updateIncidentStatus(item.complaintId, 'approved');
-        showNotification('Report approved and forwarded successfully.', 'success');
-      } else if (action === 'reject') {
-        await PollutionService.updateIncidentStatus(item.complaintId, 'dismissed');
+      if (action === 'reject') {
+        await PollutionService.updateIncidentStatus(item.complaintId || item.id, 'dismissed');
         showNotification('Report rejected successfully.', 'info');
+        setPreviewMedia(null);
       } else if (action === 'delete') {
-        await PollutionService.deleteIncident(item.complaintId);
+        await PollutionService.deleteIncident(item.complaintId || item.id);
         showNotification('Report hard deleted and wiped from database.', 'error');
+        setPreviewMedia(null);
       }
-      setPreviewMedia(null);
       loadMediaData();
     } catch (e) {
       console.error('Failed to execute single action:', e);
@@ -1200,36 +1267,38 @@ Time: ${new Date().toLocaleString()}
                       </p>
                     </div>
 
-                    {/* Officer Assignment Dropdown */}
-                    <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
-                          Assigned Municipal Officer
-                        </span>
-                        {previewMedia.assignedOfficer && previewMedia.assignedOfficer !== 'None' ? (
-                          <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
-                            Assigned
+                    {/* Officer Assignment Section - Visible ONLY after Approval and BEFORE Resolution */}
+                    {isApproved && !isResolved && (
+                      <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
+                            {previewMedia.assignedOfficer && previewMedia.assignedOfficer !== 'None' ? 'Assigned Officer' : 'Assign Municipal Officer'}
                           </span>
-                        ) : (
-                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
-                            Unassigned
-                          </span>
-                        )}
+                          {previewMedia.assignedOfficer && previewMedia.assignedOfficer !== 'None' ? (
+                            <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                              Assigned
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
+                              Unassigned
+                            </span>
+                          )}
+                        </div>
+                        <select
+                          value={previewMedia.assignedOfficer || ''}
+                          onChange={(e) => handleAssignOfficer(e.target.value)}
+                          disabled={isAssigningOfficer}
+                          className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                        >
+                          <option value="" disabled={!!previewMedia.assignedOfficer}>
+                            {previewMedia.assignedOfficer ? `Current: ${previewMedia.assignedOfficer} (Click to Change Officer)` : "-- Select Officer to Assign --"}
+                          </option>
+                          {officersList.map((off) => (
+                            <option key={off} value={off}>{off}</option>
+                          ))}
+                        </select>
                       </div>
-                      <select
-                        value={previewMedia.assignedOfficer || ''}
-                        onChange={(e) => handleAssignOfficer(e.target.value)}
-                        disabled={isAssigningOfficer}
-                        className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
-                      >
-                        <option value="" disabled={!!previewMedia.assignedOfficer}>
-                          {previewMedia.assignedOfficer ? `Current: ${previewMedia.assignedOfficer} (Click to Change)` : "-- Select Officer to Assign --"}
-                        </option>
-                        {officersList.map((off) => (
-                          <option key={off} value={off}>{off}</option>
-                        ))}
-                      </select>
-                    </div>
+                    )}
 
                     {/* Severity Score Percentage Card (Percentage Only) */}
                     <div className="p-3.5 bg-blue-50/60 dark:bg-blue-955/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl flex items-center justify-between">
@@ -1438,6 +1507,68 @@ Time: ${new Date().toLocaleString()}
                 >
                   {resolvingLoading && <RefreshCw className="h-3 w-3 animate-spin" />}
                   Confirm Resolve
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* One-Step Approval & Officer Assignment Modal */}
+      {showApproveModal && approveTargetItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xs" />
+          <div className="relative bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-2xl w-full max-w-md text-left z-10 p-6 space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 rounded-lg text-xs font-extrabold uppercase">Step 1 & 2</span>
+                <h3 className="text-sm font-extrabold text-zinc-950 dark:text-white uppercase tracking-widest">
+                  Approve Report & Assign Officer
+                </h3>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-2 leading-relaxed">
+                Approving complaint report <strong className="text-zinc-900 dark:text-white font-bold">{approveTargetItem.name || approveTargetItem.title}</strong>. Select a municipal field officer to finalize approval.
+              </p>
+            </div>
+
+            <form onSubmit={handleApproveSubmit} className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-zinc-700 dark:text-zinc-300 block">
+                  Assign Municipal Field Officer <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={selectedApproveOfficer}
+                  onChange={(e) => setSelectedApproveOfficer(e.target.value)}
+                  required
+                  className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2.5 bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                >
+                  <option value="" disabled>-- Select Field Officer --</option>
+                  {officersList.map((off) => (
+                    <option key={off} value={off}>{off}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  disabled={approvingLoading}
+                  onClick={() => {
+                    setShowApproveModal(false);
+                    setApproveTargetItem(null);
+                    setSelectedApproveOfficer("");
+                  }}
+                  className="px-4 py-2 text-xs font-bold bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-md cursor-pointer hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={approvingLoading || !selectedApproveOfficer}
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {approvingLoading && <RefreshCw className="h-3 w-3 animate-spin" />}
+                  Confirm Approval & Assign
                 </button>
               </div>
             </form>

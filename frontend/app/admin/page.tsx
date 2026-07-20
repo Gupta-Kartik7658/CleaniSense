@@ -881,36 +881,44 @@ export default function AdminDashboard() {
                 <p className="text-xs text-zinc-800 dark:text-zinc-200 leading-relaxed mt-1 whitespace-pre-wrap">{selectedIncident.description}</p>
               </div>
 
-              {/* Officer Assignment Section */}
-              <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
-                    Assigned Municipal Officer
-                  </span>
-                  {selectedIncident.assignedOfficer && selectedIncident.assignedOfficer !== 'None' ? (
-                    <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
-                      Assigned
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
-                      Unassigned
-                    </span>
-                  )}
-                </div>
-                <select
-                  value={selectedIncident.assignedOfficer || ''}
-                  onChange={(e) => handleAssignOfficer(e.target.value)}
-                  disabled={isAssigningOfficer}
-                  className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
-                >
-                  <option value="" disabled={!!selectedIncident.assignedOfficer}>
-                    {selectedIncident.assignedOfficer ? `Current: ${selectedIncident.assignedOfficer} (Click to Change)` : "-- Select Officer to Assign --"}
-                  </option>
-                  {officersList.map((off) => (
-                    <option key={off} value={off}>{off}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Officer Assignment Section - Visible ONLY after Approval and BEFORE Resolution */}
+              {(() => {
+                const s = (selectedIncident.status || '').toLowerCase();
+                const isApproved = s === 'municipality_accepted' || s === 'officer_assigned' || s === 'in_progress' || s === 'inspection_completed' || s === 'investigating' || s === 'approved';
+                const isResolved = s === 'resolved';
+                if (!isApproved || isResolved) return null;
+                return (
+                  <div className="p-3 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200 dark:border-zinc-700/80 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-500 dark:text-zinc-400 font-extrabold uppercase tracking-wider">
+                        {selectedIncident.assignedOfficer && selectedIncident.assignedOfficer !== 'None' ? 'Assigned Officer' : 'Assign Municipal Officer'}
+                      </span>
+                      {selectedIncident.assignedOfficer && selectedIncident.assignedOfficer !== 'None' ? (
+                        <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900">
+                          Assigned
+                        </span>
+                      ) : (
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-900">
+                          Unassigned
+                        </span>
+                      )}
+                    </div>
+                    <select
+                      value={selectedIncident.assignedOfficer || ''}
+                      onChange={(e) => handleAssignOfficer(e.target.value)}
+                      disabled={isAssigningOfficer}
+                      className="w-full text-xs font-bold border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:outline-none focus:border-emerald-600 cursor-pointer"
+                    >
+                      <option value="" disabled={!!selectedIncident.assignedOfficer}>
+                        {selectedIncident.assignedOfficer ? `Current: ${selectedIncident.assignedOfficer} (Click to Change Officer)` : "-- Select Officer to Assign --"}
+                      </option>
+                      {officersList.map((off) => (
+                        <option key={off} value={off}>{off}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
 
               {/* Severity Score Percentage Card */}
               <div className="p-3 bg-blue-50/60 dark:bg-blue-955/20 border border-blue-200/80 dark:border-blue-900/40 rounded-xl flex items-center justify-between">
