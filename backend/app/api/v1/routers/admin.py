@@ -567,7 +567,7 @@ async def resolve_incident_endpoint(
         db.delete(existing_res)
         db.commit()
 
-    officer_name = current_user.name or current_user.email or "Municipal Admin"
+    officer_name = complaint.assigned_officer or current_user.name or current_user.email or "Municipal Admin"
     res_summary = summary or description or "Environmental issue resolved successfully."
     res_actions = actions or description or "Field inspection conducted and cleanup actions performed."
 
@@ -578,7 +578,7 @@ async def resolve_incident_endpoint(
     resolution = ResolutionReport(
         complaint_id=incident_id,
         summary=res_summary,
-        department="Municipality Operations",
+        department=complaint.assigned_department or "Municipality Operations",
         officer_name=officer_name,
         actions=res_actions,
         before_image_url=before_image_path,
@@ -589,8 +589,10 @@ async def resolve_incident_endpoint(
 
     # Update complaint status & assigned officer
     complaint.status = "resolved"
-    complaint.assigned_officer = officer_name
-    complaint.assigned_department = "Municipality Operations"
+    if not complaint.assigned_officer:
+        complaint.assigned_officer = officer_name
+    if not complaint.assigned_department:
+        complaint.assigned_department = "Municipality Operations"
     db.add(complaint)
     db.commit()
     db.refresh(complaint)
