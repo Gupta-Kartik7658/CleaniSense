@@ -79,14 +79,14 @@ export default function AdminDashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Summary Stats & Incidents
-      const [dash, incData, hotspotRes] = await Promise.all([
-        dashboardService.getDashboard().catch(() => null),
+      // 1. Fetch System-Wide Admin Stats, Incidents & Hotspots
+      const [adminStats, incData, hotspotRes] = await Promise.all([
+        PollutionService.getDashboardStats().catch(() => null),
         PollutionService.getIncidents({ limit: 100 }).catch(() => ({ incidents: [], total: 0 })),
         api.get('/admin/hotspots').catch(() => null)
       ]);
 
-      setDashboardData(dash);
+      setDashboardData(adminStats);
       const incList = incData.incidents || [];
       setIncidents(incList);
 
@@ -429,10 +429,10 @@ export default function AdminDashboard() {
       {/* Compact Height Stats Cards Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { name: 'Total Reports', value: dashboardData?.overview?.total_reports ?? incidents.length, icon: Activity },
-          { name: 'Active Issues', value: dashboardData?.overview?.active_reports ?? incidents.filter(i => i.status !== 'resolved').length, icon: AlertTriangle },
-          { name: 'Resolved Reports', value: dashboardData?.overview?.resolved_reports ?? incidents.filter(i => i.status === 'resolved').length, icon: CheckCircle },
-          { name: 'Active Hotspots', value: hotspotsList.length, icon: MapPin },
+          { name: 'Total Reports', value: dashboardData?.totalIncidents ?? dashboardData?.overview?.total_reports ?? incidents.length, icon: Activity },
+          { name: 'Active Issues', value: dashboardData?.pendingIncidents ?? dashboardData?.overview?.active_reports ?? incidents.filter(i => i.status !== 'resolved').length, icon: AlertTriangle },
+          { name: 'Resolved Reports', value: dashboardData?.resolvedIncidents ?? dashboardData?.overview?.resolved_reports ?? incidents.filter(i => i.status === 'resolved').length, icon: CheckCircle },
+          { name: 'Active Hotspots', value: dashboardData?.hotspotCount ?? hotspotsList.length, icon: MapPin },
         ].map((stat) => (
           <div
             key={stat.name}

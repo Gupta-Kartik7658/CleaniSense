@@ -26,7 +26,7 @@ export default function ComplaintsPage() {
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [configLoading, setConfigLoading] = useState(true);
   const [maxUploadSizeMb, setMaxUploadSizeMb] = useState(10);
-  const [allowedTypes, setAllowedTypes] = useState<string[]>(["image/jpeg", "image/png", "application/pdf"]);
+  const [allowedTypes, setAllowedTypes] = useState<string[]>(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/heic", "application/pdf"]);
   const [maxAttachments, setMaxAttachments] = useState(5);
 
   // Form states
@@ -64,7 +64,9 @@ export default function ComplaintsPage() {
           setConfigError("No complaint categories are configured. Please contact support or try again later.");
         }
         setMaxUploadSizeMb(config.max_upload_size_mb || 10);
-        setAllowedTypes(config.allowed_file_types || ["image/jpeg", "image/png", "application/pdf"]);
+        if (config.allowed_file_types && config.allowed_file_types.length > 0) {
+          setAllowedTypes(config.allowed_file_types);
+        }
         setMaxAttachments(config.max_attachments || 5);
       } catch (err) {
         console.error("Failed to load configurations:", err);
@@ -121,8 +123,12 @@ export default function ComplaintsPage() {
 
     // Validate size and type for each file
     for (const file of filesArray) {
-      if (!allowedTypes.includes(file.type)) {
-        setFileErrors(`Unsupported file format: ${file.name}. Only JPEG, PNG, and PDF files are allowed.`);
+      const fType = (file.type || "").toLowerCase();
+      const isAllowed = allowedTypes.some(t => t.toLowerCase() === fType) ||
+        fType.startsWith("image/") ||
+        fType === "application/pdf";
+      if (!isAllowed) {
+        setFileErrors(`Unsupported file format: ${file.name}. Only Image (JPEG, PNG, WebP) and PDF files are allowed.`);
         return;
       }
       if (file.size > maxUploadSizeMb * 1024 * 1024) {
@@ -206,6 +212,18 @@ export default function ComplaintsPage() {
         },
         selectedFiles
       );
+
+      // Reset form fields cleanly to allow subsequent complaint submissions
+      setTitle("");
+      setDescription("");
+      setLocationName("");
+      setAreaAffected("");
+      setPopulationAffected("");
+      setDurationHours("");
+      setSelectedFiles([]);
+      setFileErrors(null);
+      setVulnerablePeopleNearby(false);
+      setActiveLeakOrFire(false);
 
       // Redirect instantly back to citizen dashboard (user panel)
       router.push("/dashboard");

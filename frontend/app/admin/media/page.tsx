@@ -103,18 +103,47 @@ export default function MediaPage() {
 
     setResolvingLoading(true);
     try {
-      await PollutionService.resolveIncident(
-        previewMedia.complaintId || previewMedia.id,
+      const targetId = previewMedia.complaintId || previewMedia.id;
+      const res: any = await PollutionService.resolveIncident(
+        targetId,
         resolveSummary,
         resolveActions,
         resolveFile
       );
       showNotification('Complaint marked as resolved successfully.', 'success');
       setShowResolveModal(false);
+      
+      const newAfterUrl = res?.data?.resolution?.after_image_url || res?.resolution?.after_image_url;
+      const updatedSummary = resolveSummary;
+      const updatedActions = resolveActions;
+      
       setResolveSummary("");
       setResolveActions("");
       setResolveFile(null);
-      setPreviewMedia(null);
+
+      // Update previewMedia in-place so modal HUD reflects "Resolved" immediately
+      setPreviewMedia((prev: any) => prev ? {
+        ...prev,
+        status: 'resolved',
+        resolutionSummary: updatedSummary,
+        resolutionActions: updatedActions,
+        resolutionAfterImage: newAfterUrl || prev.resolutionAfterImage
+      } : null);
+
+      // Update mediaList in-place
+      setMediaList((prevList) => prevList.map((m) => {
+        if (m.id === previewMedia.id || m.complaintId === targetId) {
+          return {
+            ...m,
+            status: 'resolved',
+            resolutionSummary: updatedSummary,
+            resolutionActions: updatedActions,
+            resolutionAfterImage: newAfterUrl || m.resolutionAfterImage
+          };
+        }
+        return m;
+      }));
+
       loadMediaData();
     } catch (err: any) {
       console.error('Failed to resolve complaint:', err);
@@ -274,6 +303,11 @@ export default function MediaPage() {
     }
   };
 
+  const checkPendingStatus = (status: string) => {
+    const s = (status || '').toLowerCase();
+    return s !== 'resolved' && s !== 'rejected' && s !== 'dismissed';
+  };
+
   const checkApprovedStatus = (status: string) => {
     const s = (status || '').toLowerCase();
     return s === 'municipality_accepted' || s === 'officer_assigned' || s === 'in_progress' || s === 'investigating' || s === 'approved';
@@ -286,7 +320,7 @@ export default function MediaPage() {
 
   const stats = [
     { label: 'Total Media', value: mediaList.length, icon: Image, color: 'text-blue-500', bg: 'from-blue-500/10 to-blue-600/10' },
-    { label: 'Pending Review', value: mediaList.filter(m => m.status === 'submitted' || m.status === 'ai_verification_in_progress' || m.status === 'pending').length, icon: Clock, color: 'text-yellow-500', bg: 'from-yellow-500/10 to-yellow-600/10' },
+    { label: 'Pending Review', value: mediaList.filter(m => checkPendingStatus(m.status)).length, icon: Clock, color: 'text-yellow-500', bg: 'from-yellow-500/10 to-yellow-600/10' },
     { label: 'Flagged Logs', value: mediaList.filter(m => m.status === 'rejected' || m.status === 'dismissed').length, icon: Flag, color: 'text-red-500', bg: 'from-red-500/10 to-red-600/10' },
     { label: 'Resolved Reports', value: mediaList.filter(m => checkResolvedStatus(m.status)).length, icon: CheckCircle2, color: 'text-emerald-500', bg: 'from-emerald-500/10 to-emerald-600/10' },
   ];
@@ -392,7 +426,7 @@ export default function MediaPage() {
     const matchesTypeStatus = filter === 'all' ||
       (filter === 'image' && item.type === 'image') ||
       (filter === 'video' && item.type === 'video') ||
-      (filter === 'pending' && (item.status === 'submitted' || item.status === 'ai_verification_in_progress' || item.status === 'pending')) ||
+      (filter === 'pending' && checkPendingStatus(item.status)) ||
       (filter === 'approved' && checkApprovedStatus(item.status)) ||
       (filter === 'resolved' && checkResolvedStatus(item.status)) ||
       (filter === 'flagged' && (item.status === 'rejected' || item.status === 'dismissed'));

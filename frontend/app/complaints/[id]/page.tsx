@@ -60,6 +60,26 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
     return "Under Review";
   };
 
+  const formatTimelineStatus = (statusStr: string): string => {
+    const lower = (statusStr || "").toLowerCase();
+    switch (lower) {
+      case "submitted": return "Report Submitted";
+      case "draft": return "Draft Saved";
+      case "ai_verification_in_progress": return "AI Verification In Progress";
+      case "ai_validation_completed": return "AI Verification Completed";
+      case "municipality_accepted": return "Accepted by Municipality";
+      case "officer_assigned": return "Field Officer Assigned";
+      case "in_progress": return "Work In Progress";
+      case "inspection_completed": return "Field Inspection Completed";
+      case "resolved": return "Report Resolved";
+      case "rejected": return "Report Rejected";
+      case "canceled":
+      case "archived": return "Report Archived";
+      case "no_pollution_detected": return "No Pollution Detected";
+      default: return statusStr.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    }
+  };
+
   const getStepStatus = (stepId: string, currentStatus: string) => {
     const status = currentStatus.toLowerCase();
     
@@ -315,7 +335,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                     <div className="space-y-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                         <span className="font-bold text-slate-800 dark:text-white text-xs">
-                          {mapStatus(event.status)}
+                          {formatTimelineStatus(event.status)}
                         </span>
                         <span className="text-[10px] text-slate-400">
                           {new Date(event.created_at).toLocaleString("en-IN", {
@@ -338,7 +358,10 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
             </div>
 
             {/* Resolution Transparency Section */}
-            {statusMapped === "Resolved" && resolutionDetail && (
+            {(statusMapped === "Resolved" || complaintDetail?.status?.toLowerCase() === "resolved") && (resolutionDetail || complaintDetail?.resolution) && (() => {
+              const resObj = resolutionDetail || complaintDetail?.resolution;
+              if (!resObj) return null;
+              return (
               <div className="space-y-8">
                 
                 {/* Government Resolution Report */}
@@ -354,7 +377,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                           Department Responsible
                         </span>
                         <span className="font-bold text-slate-800 dark:text-slate-200">
-                          {resolutionDetail.department}
+                          {resObj.department}
                         </span>
                       </div>
                       <div>
@@ -362,7 +385,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                           Assigned Officer
                         </span>
                         <span className="font-bold text-slate-800 dark:text-slate-200">
-                          {resolutionDetail.officer_name}
+                          {resObj.officer_name}
                         </span>
                       </div>
                       <div>
@@ -370,13 +393,13 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                           Resolution Date
                         </span>
                         <span className="font-medium text-slate-800 dark:text-slate-200">
-                          {new Date(
-                            resolutionDetail.date_resolved
+                          {resObj.date_resolved ? new Date(
+                            resObj.date_resolved
                           ).toLocaleDateString("en-IN", {
                             day: "numeric",
                             month: "long",
                             year: "numeric",
-                          })}
+                          }) : "Recently Resolved"}
                         </span>
                       </div>
                     </div>
@@ -387,7 +410,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                           Resolution Summary
                         </span>
                         <p className="text-slate-650 dark:text-slate-350">
-                          {resolutionDetail.summary}
+                          {resObj.summary}
                         </p>
                       </div>
                       <div>
@@ -395,7 +418,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                           Work Details & Actions performed
                         </span>
                         <p className="text-slate-650 dark:text-slate-350">
-                          {resolutionDetail.actions}
+                          {resObj.actions}
                         </p>
                       </div>
                     </div>
@@ -403,7 +426,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 </div>
 
                 {/* Evidence Images */}
-                {(resolutionDetail.before_image_url || resolutionDetail.after_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
+                {(resObj.before_image_url || resObj.after_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
                   <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
                     <h3 className="text-sm font-extrabold text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-100 dark:border-slate-700 pb-3">
                       Resolution Evidence (Before vs After)
@@ -412,14 +435,14 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                       
                       {/* Before Image */}
-                      {(resolutionDetail.before_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
+                      {(resObj.before_image_url || (complaintDetail.attachments && complaintDetail.attachments.length > 0)) && (
                         <div className="space-y-2 text-center">
                           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
                             Before (Citizen Submission)
                           </span>
                           <div className="h-56 relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100">
                             <img
-                              src={resolutionDetail.before_image_url || complaintDetail.attachments[0].public_url}
+                              src={resObj.before_image_url || complaintDetail.attachments[0].public_url}
                               alt="Before Cleanup"
                               className="w-full h-full object-cover"
                             />
@@ -428,14 +451,14 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                       )}
 
                       {/* After Image */}
-                      {resolutionDetail.after_image_url && (
+                      {resObj.after_image_url && (
                         <div className="space-y-2 text-center">
                           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
                             After (Municipal Resolution)
                           </span>
                           <div className="h-56 relative rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-100">
                             <img
-                              src={resolutionDetail.after_image_url}
+                              src={resObj.after_image_url}
                               alt="After Cleanup"
                               className="w-full h-full object-cover"
                             />
@@ -448,7 +471,8 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                 )}
 
               </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
