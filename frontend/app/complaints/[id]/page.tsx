@@ -347,7 +347,7 @@ export default function ComplaintDetailsPage({ params }: PageProps) {
                         </span>
                       </div>
                       {event.remarks && (
-                        <p className="text-slate-500 dark:text-slate-400 leading-relaxed text-xs">
+                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-xs font-medium bg-slate-50 dark:bg-slate-900/50 p-2 rounded-md border border-slate-100 dark:border-slate-800/80 mt-1">
                           {event.remarks}
                         </p>
                       )}

@@ -400,6 +400,10 @@ def update_incident_status(
     new_status = payload.get("status")
     notes = payload.get("notes")
 
+    # Prevent duplicate approval requests if complaint is already approved or further in lifecycle
+    if new_status == "approved" and complaint.status in ["municipality_accepted", "officer_assigned", "in_progress", "inspection_completed", "resolved"]:
+        raise HTTPException(status_code=409, detail="Incident report has already been approved")
+
     # Map frontend status to database status
     if new_status == "resolved":
         complaint.status = "resolved"
@@ -487,32 +491,48 @@ def assign_officer_to_incident(
     complaint = db.query(DBComplaint).filter(DBComplaint.id == incident_id, DBComplaint.is_deleted == False).first()
     if not complaint:
         raise HTTPException(status_code=404, detail="Incident report not found")
-        
+
+    # Restrict officer assignment prior to approval
+    if complaint.status in ["submitted", "draft", "ai_verification_in_progress", "ai_validation_completed"]:
+        raise HTTPException(status_code=400, detail="Officer assignment is not allowed before complaint is approved")
+
+    # Restrict officer modification on resolved or closed complaints
+    if complaint.status in ["resolved", "rejected", "archived", "canceled"]:
+        raise HTTPException(status_code=400, detail="Cannot assign or change officer for a resolved or closed complaint")
+
     officer_name = payload.get("officer_name") or payload.get("assigned_officer") or payload.get("officer")
     if not officer_name:
         raise HTTPException(status_code=400, detail="Officer name is required")
-        
+
+    prev_officer = complaint.assigned_officer
     complaint.assigned_officer = officer_name
-    if complaint.status in ["submitted", "ai_validation_completed", "municipality_accepted"]:
+    if complaint.status == "municipality_accepted":
         complaint.status = "officer_assigned"
-        
+
     db.add(complaint)
     db.commit()
     db.refresh(complaint)
-    
+
+    # Format audit timeline history remarks (e.g., "Reassigned from Officer Rajesh to Officer Priya")
+    if prev_officer and prev_officer != "None" and prev_officer != officer_name:
+        remarks = f"Reassigned from {prev_officer} to {officer_name}"
+    else:
+        remarks = f"Assigned to {officer_name}"
+
     from app.services.complaint_service import complaint_service
     complaint_service._add_status_history_entry(
         db,
         complaint.id,
         complaint.status,
-        f"Assigned to {officer_name}",
+        remarks,
         current_user.id
     )
-    
+    complaint_service._dispatch_notification_hook(db, complaint, "OFFICER_ASSIGNED")
+
     incident = map_db_complaint_to_frontend(complaint)
     return standard_response(
         success=True,
-        message=f"Incident assigned to {officer_name} successfully",
+        message=f"Incident officer updated to {officer_name} successfully",
         data=incident
     )
 
