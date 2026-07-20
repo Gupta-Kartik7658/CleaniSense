@@ -326,7 +326,9 @@ def get_admin_incidents(
     query = db.query(DBComplaint).options(
         joinedload(DBComplaint.user),
         joinedload(DBComplaint.category),
-        joinedload(DBComplaint.attachments)
+        joinedload(DBComplaint.attachments),
+        joinedload(DBComplaint.resolution),
+        joinedload(DBComplaint.municipality)
     ).filter(
         DBComplaint.is_deleted == False,
         (DBComplaint.severity_score >= 20.0) | (DBComplaint.severity_score == None),
