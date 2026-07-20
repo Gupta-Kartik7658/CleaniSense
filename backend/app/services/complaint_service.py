@@ -37,9 +37,21 @@ ALLOWED_TRANSITIONS: Dict[str, List[str]] = {
         ComplaintStatus.MUNICIPALITY_ACCEPTED.value,
         ComplaintStatus.REJECTED.value
     ],
-    ComplaintStatus.MUNICIPALITY_ACCEPTED.value: [ComplaintStatus.OFFICER_ASSIGNED.value],
-    ComplaintStatus.OFFICER_ASSIGNED.value: [ComplaintStatus.IN_PROGRESS.value],
-    ComplaintStatus.IN_PROGRESS.value: [ComplaintStatus.INSPECTION_COMPLETED.value],
+    ComplaintStatus.MUNICIPALITY_ACCEPTED.value: [
+        ComplaintStatus.OFFICER_ASSIGNED.value,
+        ComplaintStatus.RESOLVED.value,
+        ComplaintStatus.REJECTED.value
+    ],
+    ComplaintStatus.OFFICER_ASSIGNED.value: [
+        ComplaintStatus.IN_PROGRESS.value,
+        ComplaintStatus.RESOLVED.value,
+        ComplaintStatus.REJECTED.value
+    ],
+    ComplaintStatus.IN_PROGRESS.value: [
+        ComplaintStatus.INSPECTION_COMPLETED.value,
+        ComplaintStatus.RESOLVED.value,
+        ComplaintStatus.REJECTED.value
+    ],
     ComplaintStatus.INSPECTION_COMPLETED.value: [
         ComplaintStatus.RESOLVED.value,
         ComplaintStatus.REJECTED.value
