@@ -29,7 +29,7 @@ jobs:
         run: |
           git pull origin main
           cd backend
-          source venv/bin/active
+          source venv/bin/activate
           pip install -r requirements.txt
           sudo systemctl restart fastapi.service
           sudo systemctl status fastapi.service --no-pager
